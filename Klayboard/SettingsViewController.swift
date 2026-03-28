@@ -49,7 +49,7 @@ final class SettingsViewController: UITableViewController {
         case .rows:             return RowMode.allCases.count
         case .height:           return 1
         case .keyCustomization: return 1
-        case .feedback:         return 3
+        case .feedback:         return 4
         case .macros:           return config.macros.count + 1  // +1 for "Add Macro"
         }
     }
@@ -99,6 +99,8 @@ final class SettingsViewController: UITableViewController {
 
         case .layout:
             let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+            cell.accessoryView = nil // <--- 1. ADD THIS TO CLEAR RECYCLED SWITCHES
+            
             let layouts: [LayoutID] = LayoutID.allCases.filter { $0 != .symbols }
             let id = layouts[indexPath.row]
             cell.textLabel?.text = BaseLayouts.all[id]?.displayName ?? id.rawValue
@@ -108,6 +110,8 @@ final class SettingsViewController: UITableViewController {
 
         case .rows:
             let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+            cell.accessoryView = nil // <--- 2. ADD THIS TO CLEAR RECYCLED SWITCHES
+            
             let mode = RowMode.allCases[indexPath.row]
             cell.textLabel?.text = mode.displayName
             cell.textLabel?.textColor = .label
@@ -117,15 +121,15 @@ final class SettingsViewController: UITableViewController {
         case .height:
             let cell = tableView.dequeueReusableCell(withIdentifier: "slider", for: indexPath) as! SliderCell
             cell.configure(
+                title: "Scale",
                 value: Float(config.height.scaleFactor),
                 min: 0.75, max: 1.4,
-                label: "Scale: \(String(format: "%.0f%%", config.height.scaleFactor * 100))"
+                valueString: String(format: "%.0f%%", config.height.scaleFactor * 100)
             )
             cell.onValueChanged = { [weak self] val in
                 self?.config.height.scaleFactor = CGFloat(val)
                 self?.saveConfig()
-                // Update the label live
-                cell.updateLabel("Scale: \(String(format: "%.0f%%", val * 100))")
+                cell.updateValueLabel(String(format: "%.0f%%", val * 100))
             }
             return cell
 
@@ -161,9 +165,23 @@ final class SettingsViewController: UITableViewController {
                 sw.tag = 2
                 sw.addTarget(self, action: #selector(toggleChanged(_:)), for: .valueChanged)
                 cell.accessoryView = sw
-            default: break
-            }
-            return cell
+            case 3:
+                let sliderCell = tableView.dequeueReusableCell(withIdentifier: "slider", for: indexPath) as! SliderCell
+                sliderCell.configure(
+                    title: "Long Press",
+                    value: Float(config.longPressDuration),
+                    min: 0.15, max: 0.8,
+                    valueString: String(format: "%.2fs", config.longPressDuration)
+                )
+                sliderCell.onValueChanged = { [weak self] val in
+                    self?.config.longPressDuration = Double(val)
+                    self?.saveConfig()
+                    sliderCell.updateValueLabel(String(format: "%.2fs", val))
+                }
+                return sliderCell
+                default: break
+                }
+                return cell
 
         case .macros:
             let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
@@ -315,6 +333,7 @@ extension SettingsViewController: KeyCustomizationDelegate {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 final class SliderCell: UITableViewCell {
+    private let titleLabel = UILabel()
     private let slider = UISlider()
     private let valueLabel = UILabel()
     var onValueChanged: ((Float) -> Void)?
@@ -323,37 +342,54 @@ final class SliderCell: UITableViewCell {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         selectionStyle = .none
 
-        valueLabel.font = .monospacedDigitSystemFont(ofSize: 14, weight: .medium)
+        // 1. Title on the left
+        titleLabel.font = .systemFont(ofSize: 17, weight: .regular)
+        titleLabel.textColor = .label
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        // 2. Value on the right
+        valueLabel.font = .monospacedDigitSystemFont(ofSize: 17, weight: .regular)
+        valueLabel.textColor = .secondaryLabel
         valueLabel.textAlignment = .right
         valueLabel.translatesAutoresizingMaskIntoConstraints = false
 
+        // 3. Slider in the middle
         slider.translatesAutoresizingMaskIntoConstraints = false
         slider.addTarget(self, action: #selector(sliderChanged), for: .valueChanged)
 
-        contentView.addSubview(valueLabel)
+        contentView.addSubview(titleLabel)
         contentView.addSubview(slider)
+        contentView.addSubview(valueLabel)
 
         NSLayoutConstraint.activate([
-            valueLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            valueLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            valueLabel.widthAnchor.constraint(equalToConstant: 90),
+            // Pin title to the left with a fixed width
+            titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            titleLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            titleLabel.widthAnchor.constraint(equalToConstant: 90),
 
-            slider.leadingAnchor.constraint(equalTo: valueLabel.trailingAnchor, constant: 12),
-            slider.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            // Pin slider between title and value label
+            slider.leadingAnchor.constraint(equalTo: titleLabel.trailingAnchor, constant: 8),
             slider.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+
+            // Pin value label to the right with a fixed width
+            valueLabel.leadingAnchor.constraint(equalTo: slider.trailingAnchor, constant: 12),
+            valueLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            valueLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            valueLabel.widthAnchor.constraint(equalToConstant: 55)
         ])
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
-    func configure(value: Float, min: Float, max: Float, label: String) {
+    func configure(title: String, value: Float, min: Float, max: Float, valueString: String) {
+        titleLabel.text = title
         slider.minimumValue = min
         slider.maximumValue = max
         slider.value = value
-        valueLabel.text = label
+        valueLabel.text = valueString
     }
 
-    func updateLabel(_ text: String) {
+    func updateValueLabel(_ text: String) {
         valueLabel.text = text
     }
 

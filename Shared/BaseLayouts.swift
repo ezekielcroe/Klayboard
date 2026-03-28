@@ -38,58 +38,56 @@ enum BaseLayouts {
     ], baseHeight: 42, tag: .number)
 
     static let topAlphaRow = LayoutRow(keys: [
-        KeyDefinition(id: "q", label: "q", action: .character("q")),
-        KeyDefinition(id: "w", label: "w", action: .character("w")),
-        KeyDefinition(id: "e", label: "e", action: .character("e")),
-        KeyDefinition(id: "r", label: "r", action: .character("r")),
-        KeyDefinition(id: "t", label: "t", action: .character("t")),
-        KeyDefinition(id: "y", label: "y", action: .character("y")),
-        KeyDefinition(id: "u", label: "u", action: .character("u")),
-        KeyDefinition(id: "i", label: "i", action: .character("i")),
-        KeyDefinition(id: "o", label: "o", action: .character("o")),
-        KeyDefinition(id: "p", label: "p", action: .character("p")),
+        KeyDefinition(id: "q", label: "q", action: .character("q"), altAction: .character("+")),
+        KeyDefinition(id: "w", label: "w", action: .character("w"), altAction: .character("=")),
+        KeyDefinition(id: "e", label: "e", action: .character("e"), altAction: .character("\"")),
+        KeyDefinition(id: "r", label: "r", action: .character("r"), altAction: .character("'")),
+        KeyDefinition(id: "t", label: "t", action: .character("t"), altAction: .character(":")),
+        KeyDefinition(id: "y", label: "y", action: .character("y"), altAction: .character(";")),
+        KeyDefinition(id: "u", label: "u", action: .character("u"), altAction: .character("[")),
+        KeyDefinition(id: "i", label: "i", action: .character("i"), altAction: .character("]")),
+        KeyDefinition(id: "o", label: "o", action: .character("o"), altAction: .character("{")),
+        KeyDefinition(id: "p", label: "p", action: .character("p"), altAction: .character("}")),
     ], baseHeight: 44, tag: .alpha)
 
     static let midAlphaRow = LayoutRow(keys: [
-        KeyDefinition(id: "a", label: "a", action: .character("a")),
-        KeyDefinition(id: "s", label: "s", action: .character("s")),
-        KeyDefinition(id: "d", label: "d", action: .character("d")),
-        KeyDefinition(id: "f", label: "f", action: .character("f")),
-        KeyDefinition(id: "g", label: "g", action: .character("g")),
-        KeyDefinition(id: "h", label: "h", action: .character("h")),
-        KeyDefinition(id: "j", label: "j", action: .character("j")),
-        KeyDefinition(id: "k", label: "k", action: .character("k")),
-        KeyDefinition(id: "l", label: "l", action: .character("l")),
+        KeyDefinition(id: "a", label: "a", action: .character("a"), altAction: .character("-")),
+        KeyDefinition(id: "s", label: "s", action: .character("s"), altAction: .character("_")),
+        KeyDefinition(id: "d", label: "d", action: .character("d"), altAction: .character("\\")),
+        KeyDefinition(id: "f", label: "f", action: .character("f"), altAction: .character("|")),
+        KeyDefinition(id: "g", label: "g", action: .character("g"), altAction: .character("~")),
+        KeyDefinition(id: "h", label: "h", action: .character("h"), altAction: .character("<")),
+        KeyDefinition(id: "j", label: "j", action: .character("j"), altAction: .character(">")),
+        KeyDefinition(id: "k", label: "k", action: .character("k"), altAction: .character("?")),
+        KeyDefinition(id: "l", label: "l", action: .character("l"), altAction: .character("/")),
     ], baseHeight: 44, tag: .alpha)
 
     static let bottomAlphaRow = LayoutRow(keys: [
         KeyDefinition(id: "shift", label: "sf:shift",       action: .shift,            widthMultiplier: 1.5, style: .modifier),
-        KeyDefinition(id: "z",     label: "z",              action: .character("z")),
-        KeyDefinition(id: "x",     label: "x",              action: .character("x")),
-        KeyDefinition(id: "c",     label: "c",              action: .character("c")),
-        KeyDefinition(id: "v",     label: "v",              action: .character("v")),
-        KeyDefinition(id: "b",     label: "b",              action: .character("b")),
-        KeyDefinition(id: "n",     label: "n",              action: .character("n")),
-        KeyDefinition(id: "m",     label: "m",              action: .character("m"),   altAction: .character(",")),
+        KeyDefinition(id: "z",     label: "z",              action: .character("z"),   altAction: .character("`")),
+        KeyDefinition(id: "x",     label: "x",              action: .character("x"),   altAction: .character("•")),
+        KeyDefinition(id: "c",     label: "c",              action: .character("c"),   altAction: .character("§")),
+        KeyDefinition(id: "v",     label: "v",              action: .character("v"),   altAction: .character("¶")),
+        KeyDefinition(id: "b",     label: "b",              action: .character("b"),   altAction: .character("°")),
+        KeyDefinition(id: "n",     label: "n",              action: .character("n"),   altAction: .character(",")),
+        KeyDefinition(id: "m",     label: "m",              action: .character("m"),   altAction: .character(".")),
         KeyDefinition(id: "bksp",  label: "sf:delete.left", action: .backspace,        widthMultiplier: 1.5, style: .modifier),
     ], baseHeight: 44, tag: .alpha)
 
-    /// Standard spacebar row. In 5-row mode, a utility toggle button is injected.
+    /// Standard spacebar row (Period removed, Spacebar widened to 5.5)
     static let spacebarRow = LayoutRow(keys: [
         KeyDefinition(id: "symbols", label: "123",            action: .switchLayout(.symbols), widthMultiplier: 1.3, style: .modifier),
         KeyDefinition(id: "globe",   label: "sf:globe",       action: .nextKeyboard,           style: .modifier),
-        KeyDefinition(id: "space",   label: " ",              action: .space,                  widthMultiplier: 4.5, style: .spacebar),
-        KeyDefinition(id: "period",  label: ".",              action: .character("."),          altAction: .character("?")),
+        KeyDefinition(id: "space",   label: " ",              action: .space, swipeUpAction: .dismissKeyboard, widthMultiplier: 5.5, style: .spacebar),
         KeyDefinition(id: "return",  label: "return",         action: .returnKey,              widthMultiplier: 1.5, style: .modifier),
     ], baseHeight: 44, tag: .bottom)
 
-    /// Spacebar row variant with a utility-row toggle for 5-row mode.
+    /// Spacebar row variant with a utility-row toggle (Period removed, Spacebar widened to 4.8)
     static let spacebarRowWithToggle = LayoutRow(keys: [
         KeyDefinition(id: "utilToggle", label: "sf:slider.horizontal.3", action: .toggleUtilityRow, style: .utility),
         KeyDefinition(id: "symbols",    label: "123",            action: .switchLayout(.symbols), widthMultiplier: 1.2, style: .modifier),
         KeyDefinition(id: "globe",      label: "sf:globe",      action: .nextKeyboard,           style: .modifier),
-        KeyDefinition(id: "space",      label: " ",             action: .space,                  widthMultiplier: 3.8, style: .spacebar),
-        KeyDefinition(id: "period",     label: ".",             action: .character("."),          altAction: .character("?")),
+        KeyDefinition(id: "space",      label: " ",             action: .space, swipeUpAction: .dismissKeyboard, widthMultiplier: 4.8, style: .spacebar),
         KeyDefinition(id: "return",     label: "return",        action: .returnKey,              widthMultiplier: 1.3, style: .modifier),
     ], baseHeight: 44, tag: .bottom)
 
@@ -136,7 +134,7 @@ enum BaseLayouts {
         KeyDefinition(id: "symbols", label: "#+=",   action: .switchLayout(.symbols), widthMultiplier: 1.2, style: .modifier),
         KeyDefinition(id: "lbrace",  label: "{",     action: .character("{"),         altAction: .character("[")),
         KeyDefinition(id: "rbrace",  label: "}",     action: .character("}"),         altAction: .character("]")),
-        KeyDefinition(id: "space",   label: " ",     action: .space,                 widthMultiplier: 3.0, style: .spacebar),
+        KeyDefinition(id: "space",   label: " ",     action: .space, swipeUpAction: .dismissKeyboard, widthMultiplier: 3.0, style: .spacebar),
         KeyDefinition(id: "semi",    label: ";",     action: .character(";"),         altAction: .character(":")),
         KeyDefinition(id: "slash",   label: "/",     action: .character("/"),         altAction: .character("\\")),
         KeyDefinition(id: "eq",      label: "=",     action: .character("="),         altAction: .character("+")),
@@ -237,29 +235,33 @@ enum BaseLayouts {
     /// Returns the layout with the spacebar row swapped for the toggle variant when in 5-row mode.
     static func layout(for id: LayoutID, rowMode: RowMode) -> KeyboardLayout {
         guard var layout = all[id] else { return standard }
+        
         if rowMode == .fiveRows {
-            // Replace the bottom row with the toggle-equipped variant
             var rows = layout.rows
             if let idx = rows.lastIndex(where: { $0.tag == .bottom }) {
                 let original = rows[idx]
-                // Inject toggle button as first key
                 var keys = original.keys
-                let toggleKey = KeyDefinition(
-                    id: "utilToggle",
-                    label: "sf:slider.horizontal.3",
-                    action: .toggleUtilityRow,
-                    style: .utility
-                )
-                // Only add if not already present
+                
+                // Inject toggle button as first key if not already present
                 if !keys.contains(where: { $0.id == "utilToggle" }) {
+                    let toggleKey = KeyDefinition(
+                        id: "utilToggle",
+                        label: "sf:slider.horizontal.3",
+                        action: .toggleUtilityRow,
+                        style: .utility
+                    )
                     keys.insert(toggleKey, at: 0)
-                    // Reduce space bar width to compensate
+                    
+                    // Rebuild the spacebar to shrink it AND preserve its swipe action
                     keys = keys.map { k in
                         if k.id == "space" {
                             return KeyDefinition(
-                                id: k.id, label: k.label, action: k.action,
+                                id: k.id,
+                                label: k.label,
+                                action: k.action,
                                 altAction: k.altAction,
-                                widthMultiplier: max(k.widthMultiplier - 1.0, 2.5),
+                                swipeUpAction: k.swipeUpAction, // <--- PRESERVES THE GESTURE
+                                widthMultiplier: max(k.widthMultiplier - 1.0, 3.5),
                                 style: k.style
                             )
                         }

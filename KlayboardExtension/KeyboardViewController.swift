@@ -27,6 +27,7 @@ final class KeyboardViewController: UIInputViewController {
     // ── Rendering ──────────────────────────────
     private var keyboardView: KeyboardRenderView!
     private var heightConstraint: NSLayoutConstraint?
+    private var containerHeightConstraint: NSLayoutConstraint?
 
     // ── Delete repeat ──────────────────────────
     private var deleteTimer: Timer?
@@ -53,12 +54,14 @@ final class KeyboardViewController: UIInputViewController {
         loadConfiguration()
         rebuildLayout()
     }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        updateHeight()
+    }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        // Only sync the render view's frame — do NOT call updateHeight() here
-        // or it creates a layout loop (constraint change → layout → constraint change…)
-        keyboardView?.frame = view.bounds
         keyboardView?.setNeedsLayout()
     }
 
@@ -104,10 +107,9 @@ final class KeyboardViewController: UIInputViewController {
 
     private func buildKeyboardView() {
         keyboardView = KeyboardRenderView()
-        // IMPORTANT: Keep this true — we use frame-based layout, not Auto Layout.
-        // Setting false would let Auto Layout override our explicit frame assignments.
-        keyboardView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        keyboardView.frame = view.bounds
+        
+        keyboardView.translatesAutoresizingMaskIntoConstraints = false
+        
         keyboardView.actionHandler = { [weak self] action in
             self?.handleAction(action)
         }
@@ -121,6 +123,13 @@ final class KeyboardViewController: UIInputViewController {
             self?.stopDeleteRepeat()
         }
         view.addSubview(keyboardView)
+        
+        NSLayoutConstraint.activate([
+            keyboardView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            keyboardView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            keyboardView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        
         rebuildLayout()
     }
 
@@ -144,6 +153,9 @@ final class KeyboardViewController: UIInputViewController {
             mode: config.rowMode,
             utilityExpanded: utilityRowExpanded
         )
+        
+        keyboardView.longPressDuration = config.longPressDuration
+        
         keyboardView.configure(
             rows: rows,
             scale: config.height.clamped,
@@ -160,17 +172,25 @@ final class KeyboardViewController: UIInputViewController {
             scale: config.height.clamped
         )
 
+        // 1. Constrain the System's Root View
         if let constraint = heightConstraint {
             if constraint.constant != totalHeight {
                 constraint.constant = totalHeight
             }
         } else {
             heightConstraint = view.heightAnchor.constraint(equalToConstant: totalHeight)
-            // Priority 999: just below .required (1000) to avoid conflicts
-            // with system constraints, but high enough to override the system's
-            // default keyboard height. .defaultHigh (750) is too low.
             heightConstraint?.priority = UILayoutPriority(rawValue: 999)
             heightConstraint?.isActive = true
+        }
+        
+        // 2. Constrain our Custom Keyboard Container
+        if let containerConstraint = containerHeightConstraint {
+            if containerConstraint.constant != totalHeight {
+                containerConstraint.constant = totalHeight
+            }
+        } else {
+            containerHeightConstraint = keyboardView.heightAnchor.constraint(equalToConstant: totalHeight)
+            containerHeightConstraint?.isActive = true
         }
     }
 

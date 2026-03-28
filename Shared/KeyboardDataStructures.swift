@@ -10,8 +10,6 @@ import CoreGraphics
 // MARK: - App Group Constants
 
 enum AppConstants {
-    // ⚠️ IMPORTANT: This MUST match the App Group ID configured in
-    // Signing & Capabilities for BOTH targets in Xcode.
     static let appGroupID      = "group.com.GeekyZeke.Klayboard"
     static let userConfigKey   = "userConfiguration"
     static let feedbackChanged = "PowerKeyboardConfigChanged"
@@ -58,7 +56,7 @@ enum KeyAction: Codable, Hashable {
 
     // Utility
     case dismissKeyboard
-    case nextKeyboard          // triggers advanceToNextInputMode()
+    case nextKeyboard
     case none
 }
 
@@ -70,9 +68,10 @@ enum KeyAction: Codable, Hashable {
 /// `widthMultiplier` is relative to a 1.0-unit standard character key.
 struct KeyDefinition: Codable, Hashable {
     let id: String
-    let label: String               // supports SF Symbol names prefixed with "sf:"
+    let label: String
     let action: KeyAction
     let altAction: KeyAction?       // long-press / swipe-up secondary
+    let swipeUpAction: KeyAction? // swipe-down tertiary
     let widthMultiplier: CGFloat
     let style: KeyStyle
 
@@ -81,6 +80,7 @@ struct KeyDefinition: Codable, Hashable {
         label: String,
         action: KeyAction,
         altAction: KeyAction? = nil,
+        swipeUpAction: KeyAction? = nil,
         widthMultiplier: CGFloat = 1.0,
         style: KeyStyle = .standard
     ) {
@@ -88,6 +88,7 @@ struct KeyDefinition: Codable, Hashable {
         self.label = label
         self.action = action
         self.altAction = altAction
+        self.swipeUpAction = swipeUpAction
         self.widthMultiplier = widthMultiplier
         self.style = style
     }
@@ -220,6 +221,7 @@ struct UserOverride: Codable, Hashable, Identifiable {
     let newLabel: String?
     let newAction: KeyAction
     let newAltAction: KeyAction?
+    let newswipeUpAction: KeyAction?
     let appliesToLayouts: Set<LayoutID>
 
     init(
@@ -227,6 +229,7 @@ struct UserOverride: Codable, Hashable, Identifiable {
         newLabel: String? = nil,
         newAction: KeyAction,
         newAltAction: KeyAction? = nil,
+        newswipeUpAction: KeyAction? = nil,
         appliesToLayouts: Set<LayoutID> = []
     ) {
         self.id = UUID()
@@ -234,6 +237,7 @@ struct UserOverride: Codable, Hashable, Identifiable {
         self.newLabel = newLabel
         self.newAction = newAction
         self.newAltAction = newAltAction
+        self.newswipeUpAction = newswipeUpAction
         self.appliesToLayouts = appliesToLayouts
     }
 }
@@ -266,6 +270,7 @@ struct UserConfiguration: Codable {
     var hapticFeedbackEnabled: Bool
     var soundFeedbackEnabled: Bool
     var showKeyPopups: Bool
+    var longPressDuration: Double
 
     static let `default` = UserConfiguration(
         activeLayoutID: .standard,
@@ -275,7 +280,8 @@ struct UserConfiguration: Codable {
         height: .default,
         hapticFeedbackEnabled: true,
         soundFeedbackEnabled: false,
-        showKeyPopups: true
+        showKeyPopups: true,
+        longPressDuration: 0.2
     )
 }
 
@@ -327,6 +333,7 @@ extension KeyboardLayout {
                         label: ov.newLabel ?? key.label,
                         action: ov.newAction,
                         altAction: ov.newAltAction ?? key.altAction,
+                        swipeUpAction: key.swipeUpAction,
                         widthMultiplier: key.widthMultiplier,
                         style: key.style
                     )
