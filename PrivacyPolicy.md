@@ -23,4 +23,4 @@ If you choose not to grant Full Access, you can still use Klayboard for standard
 If we make any changes to this Privacy Policy, we will update the "Last Updated" date at the top of this page. Because we do not collect your email address or personal information, we encourage you to review this policy periodically.
 
 ### 4. Contact
-If you have any questions or concerns about this Privacy Policy or Klayboard's architecture, please contact us at: **[Insert Your Developer Email / Twitter / Support Link Here]**.
+If you have any questions or concerns about this Privacy Policy or Klayboard's architecture, please contact us at: ezekielyeo@gmail.com**.
