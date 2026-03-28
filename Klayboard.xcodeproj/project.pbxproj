@@ -6,17 +6,59 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		FE6D36BE2F77AA1200AC9410 /* KlayboardExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FE6D36B72F77AA1100AC9410 /* KlayboardExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		FE6D36C92F77B34200AC9410 /* KeyboardDataStructures.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE6D36C82F77B34200AC9410 /* KeyboardDataStructures.swift */; };
+		FE6D36CA2F77B34200AC9410 /* BaseLayouts.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE6D36C72F77B34200AC9410 /* BaseLayouts.swift */; };
+		FE6D36CB2F77B34200AC9410 /* KeyboardDataStructures.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE6D36C82F77B34200AC9410 /* KeyboardDataStructures.swift */; };
+		FE6D36CC2F77B34200AC9410 /* BaseLayouts.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE6D36C72F77B34200AC9410 /* BaseLayouts.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		FE6D36BC2F77AA1100AC9410 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FE6D36932F77A98400AC9410 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FE6D36B62F77AA1100AC9410;
+			remoteInfo = KlayboardExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		FE6D36C32F77AA1200AC9410 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				FE6D36BE2F77AA1200AC9410 /* KlayboardExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		FE6D369B2F77A98400AC9410 /* Klayboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Klayboard.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FE6D36B72F77AA1100AC9410 /* KlayboardExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = KlayboardExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		FE6D36C72F77B34200AC9410 /* BaseLayouts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseLayouts.swift; sourceTree = "<group>"; };
+		FE6D36C82F77B34200AC9410 /* KeyboardDataStructures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardDataStructures.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		FE6D36AD2F77A98600AC9410 /* Exceptions for "Klayboard" folder in "Klayboard" target */ = {
+		FE6D36DF2F77B4C100AC9410 /* Exceptions for "Klayboard" folder in "Klayboard" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Info.plist,
+				"ContainerApp-Info.plist",
 			);
 			target = FE6D369A2F77A98400AC9410 /* Klayboard */;
+		};
+		FE6D36E02F77B5F700AC9410 /* Exceptions for "KlayboardExtension" folder in "KlayboardExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"KeyboardExtension-Info.plist",
+			);
+			target = FE6D36B62F77AA1100AC9410 /* KlayboardExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -24,9 +66,17 @@
 		FE6D369D2F77A98400AC9410 /* Klayboard */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				FE6D36AD2F77A98600AC9410 /* Exceptions for "Klayboard" folder in "Klayboard" target */,
+				FE6D36DF2F77B4C100AC9410 /* Exceptions for "Klayboard" folder in "Klayboard" target */,
 			);
 			path = Klayboard;
+			sourceTree = "<group>";
+		};
+		FE6D36B82F77AA1100AC9410 /* KlayboardExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				FE6D36E02F77B5F700AC9410 /* Exceptions for "KlayboardExtension" folder in "KlayboardExtension" target */,
+			);
+			path = KlayboardExtension;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -39,13 +89,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FE6D36B42F77AA1100AC9410 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		FE6D36922F77A98400AC9410 = {
 			isa = PBXGroup;
 			children = (
+				FE6D36C62F77AB0900AC9410 /* Shared */,
 				FE6D369D2F77A98400AC9410 /* Klayboard */,
+				FE6D36B82F77AA1100AC9410 /* KlayboardExtension */,
 				FE6D369C2F77A98400AC9410 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -54,8 +113,18 @@
 			isa = PBXGroup;
 			children = (
 				FE6D369B2F77A98400AC9410 /* Klayboard.app */,
+				FE6D36B72F77AA1100AC9410 /* KlayboardExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		FE6D36C62F77AB0900AC9410 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				FE6D36C72F77B34200AC9410 /* BaseLayouts.swift */,
+				FE6D36C82F77B34200AC9410 /* KeyboardDataStructures.swift */,
+			);
+			path = Shared;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -68,10 +137,12 @@
 				FE6D36972F77A98400AC9410 /* Sources */,
 				FE6D36982F77A98400AC9410 /* Frameworks */,
 				FE6D36992F77A98400AC9410 /* Resources */,
+				FE6D36C32F77AA1200AC9410 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				FE6D36BD2F77AA1100AC9410 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				FE6D369D2F77A98400AC9410 /* Klayboard */,
@@ -82,6 +153,28 @@
 			productName = Klayboard;
 			productReference = FE6D369B2F77A98400AC9410 /* Klayboard.app */;
 			productType = "com.apple.product-type.application";
+		};
+		FE6D36B62F77AA1100AC9410 /* KlayboardExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FE6D36BF2F77AA1200AC9410 /* Build configuration list for PBXNativeTarget "KlayboardExtension" */;
+			buildPhases = (
+				FE6D36B32F77AA1100AC9410 /* Sources */,
+				FE6D36B42F77AA1100AC9410 /* Frameworks */,
+				FE6D36B52F77AA1100AC9410 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				FE6D36B82F77AA1100AC9410 /* KlayboardExtension */,
+			);
+			name = KlayboardExtension;
+			packageProductDependencies = (
+			);
+			productName = KlayboardExtension;
+			productReference = FE6D36B72F77AA1100AC9410 /* KlayboardExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -95,6 +188,11 @@
 				TargetAttributes = {
 					FE6D369A2F77A98400AC9410 = {
 						CreatedOnToolsVersion = 26.4;
+						LastSwiftMigration = 2640;
+					};
+					FE6D36B62F77AA1100AC9410 = {
+						CreatedOnToolsVersion = 26.4;
+						LastSwiftMigration = 2640;
 					};
 				};
 			};
@@ -113,12 +211,20 @@
 			projectRoot = "";
 			targets = (
 				FE6D369A2F77A98400AC9410 /* Klayboard */,
+				FE6D36B62F77AA1100AC9410 /* KlayboardExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		FE6D36992F77A98400AC9410 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FE6D36B52F77AA1100AC9410 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -132,10 +238,29 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FE6D36C92F77B34200AC9410 /* KeyboardDataStructures.swift in Sources */,
+				FE6D36CA2F77B34200AC9410 /* BaseLayouts.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FE6D36B32F77AA1100AC9410 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FE6D36CB2F77B34200AC9410 /* KeyboardDataStructures.swift in Sources */,
+				FE6D36CC2F77B34200AC9410 /* BaseLayouts.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		FE6D36BD2F77AA1100AC9410 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FE6D36B62F77AA1100AC9410 /* KlayboardExtension */;
+			targetProxy = FE6D36BC2F77AA1100AC9410 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		FE6D36AF2F77A98600AC9410 /* Debug */ = {
@@ -143,16 +268,20 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = Klayboard/Klayboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9Y77PNP57U;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Klayboard/Info.plist;
+				INFOPLIST_FILE = "Klayboard/ContainerApp-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = KlayBoard;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -161,9 +290,14 @@
 				PRODUCT_BUNDLE_IDENTIFIER = GeekyZeke.Klayboard;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -175,16 +309,20 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = Klayboard/Klayboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 9Y77PNP57U;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Klayboard/Info.plist;
+				INFOPLIST_FILE = "Klayboard/ContainerApp-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = KlayBoard;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -193,6 +331,10 @@
 				PRODUCT_BUNDLE_IDENTIFIER = GeekyZeke.Klayboard;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -323,6 +465,77 @@
 			};
 			name = Release;
 		};
+		FE6D36C02F77AA1200AC9410 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = KlayboardExtension/KlayboardExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9Y77PNP57U;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "KlayboardExtension/KeyboardExtension-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = KlayboardExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = GeekyZeke.Klayboard.KlayboardExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		FE6D36C12F77AA1200AC9410 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = KlayboardExtension/KlayboardExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9Y77PNP57U;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "KlayboardExtension/KeyboardExtension-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = KlayboardExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = GeekyZeke.Klayboard.KlayboardExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -340,6 +553,15 @@
 			buildConfigurations = (
 				FE6D36AF2F77A98600AC9410 /* Debug */,
 				FE6D36B02F77A98600AC9410 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FE6D36BF2F77AA1200AC9410 /* Build configuration list for PBXNativeTarget "KlayboardExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FE6D36C02F77AA1200AC9410 /* Debug */,
+				FE6D36C12F77AA1200AC9410 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
