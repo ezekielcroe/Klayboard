@@ -140,12 +140,15 @@ final class CursorEngine {
             toggled = word.lowercased()
         }
 
-        // Delete the old word
-        let deleteCount = word.count
+        // Capture any trailing punctuation/whitespace between word end and cursor
+        let trailing = (end + 1 < chars.count) ? String(chars[(end + 1)...]) : ""
+
+        // Delete from word start to cursor (word + trailing)
+        let deleteCount = chars.count - start
         for _ in 0..<deleteCount {
             proxy.deleteBackward()
         }
-        // Insert the toggled version
-        proxy.insertText(toggled)
+        // Re-insert toggled word + original trailing characters
+        proxy.insertText(toggled + trailing)
     }
 }

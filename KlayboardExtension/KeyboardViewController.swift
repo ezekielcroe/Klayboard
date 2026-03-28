@@ -47,6 +47,10 @@ final class KeyboardViewController: UIInputViewController {
         super.viewDidLoad()
         loadConfiguration()
         buildKeyboardView()
+ 
+        let defaults = UserDefaults(suiteName: AppConstants.appGroupID)
+        defaults?.set(Date().timeIntervalSince1970, forKey: "keyboardExtensionActivated")
+        defaults?.synchronize()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -236,6 +240,16 @@ final class KeyboardViewController: UIInputViewController {
             }
             textDocumentProxy.insertText(output)
             trackInserted(output)
+ 
+            // Feed the typed character to the touch model for bigram weighting.
+            // Only lowercase letters a-z produce meaningful bigram context.
+            // Numbers, punctuation, and symbols → nil (neutral targeting).
+            if let ch = output.lowercased().first, ch >= "a", ch <= "z" {
+                keyboardView.lastTypedCharacter = ch
+            } else {
+                keyboardView.lastTypedCharacter = nil
+            }
+ 
             // Lightweight update — only changes labels, no view rebuild
             updateKeyboardView()
 
@@ -251,10 +265,14 @@ final class KeyboardViewController: UIInputViewController {
                 textDocumentProxy.insertText(" ")
                 trackInserted(" ")
             }
+            // Space breaks bigram context — next letter starts fresh
+            keyboardView.lastTypedCharacter = nil
 
         case .returnKey:
             textDocumentProxy.insertText("\n")
             trackInserted("\n")
+            // Newline breaks bigram context
+            keyboardView.lastTypedCharacter = nil
 
         case .backspace:
             if !deleteRepeatHasFired {
@@ -364,6 +382,7 @@ final class KeyboardViewController: UIInputViewController {
     private func resetInsertTracking() {
         lastInsertedChar = nil
         secondLastInsertedChar = nil
+        keyboardView.lastTypedCharacter = nil
     }
 
     // ── Delete key repeat ────────────────────────

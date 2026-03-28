@@ -70,8 +70,8 @@ struct KeyDefinition: Codable, Hashable {
     let id: String
     let label: String
     let action: KeyAction
-    let altAction: KeyAction?       // long-press / swipe-up secondary
-    let swipeUpAction: KeyAction? // swipe-down tertiary
+    let altAction: KeyAction?       // long-press / swipe-down secondary
+    let swipeUpAction: KeyAction? // swipe-up tertiary
     let widthMultiplier: CGFloat
     let style: KeyStyle
 

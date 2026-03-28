@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+	<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+	<!-- Tracking Declaration                      -->
+	<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+	<!-- Klay does not track users in any way. -->
+	<key>NSPrivacyTracking</key>
+	<false/>
+
+	<!-- No domains are used for tracking. -->
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+
+	<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+	<!-- Collected Data Types                       -->
+	<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+	<!-- Klay collects NO user data whatsoever.     -->
+	<!-- All configuration is stored locally via    -->
+	<!-- App Group UserDefaults. No analytics, no   -->
+	<!-- telemetry, no crash reporting, no network  -->
+	<!-- calls of any kind.                         -->
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+
+	<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+	<!-- Required Reason API Declarations           -->
+	<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+
+		<!-- ── UserDefaults ─────────────────────── -->
+		<!-- Used for:                               -->
+		<!--   • UserConfiguration persistence via   -->
+		<!--     App Group shared UserDefaults        -->
+		<!--     (layout, macros, overrides, height,  -->
+		<!--     feedback prefs, onboarding flag)     -->
+		<!--   • Keyboard extension activation signal -->
+		<!--     (timestamp written by extension,     -->
+		<!--     read by container app onboarding)    -->
+		<!--                                         -->
+		<!-- Reason CA92.1: Access info from the same -->
+		<!-- app — read/write data accessible only to -->
+		<!-- the app itself and its extensions via     -->
+		<!-- the App Group suite.                     -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+
+	</array>
+
+</dict>
+</plist>

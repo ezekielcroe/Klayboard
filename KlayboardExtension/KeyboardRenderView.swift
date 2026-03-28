@@ -40,6 +40,20 @@ final class KeyboardRenderView: UIView {
     private var startTouchLocations: [UITouch: CGPoint] = [:]
     private var swipeConsumedTouches: Set<UITouch> = []
     private let swipeThreshold: CGFloat = 18.0 // points to trigger a swipe
+    
+    // ── Touch Accuracy Model ────────────────
+    private var touchModel = TouchModel()
+    private let bigramModel = BigramModel()
+ 
+    /// The last character the user typed. Set by KeyboardViewController
+    /// after each character insertion. Used for bigram-weighted targeting.
+    var lastTypedCharacter: Character?
+ 
+    /// How strongly bigram frequency influences key targeting.
+    /// 0.0 = pure geometry. 0.35 = moderate bias. 0.6 = strong bias.
+    /// Default 0.35 means geometry always dominates — bigrams only
+    /// tip the scale on genuinely ambiguous boundary touches.
+    var bigramInfluence: CGFloat = 0.35
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MARK: - Configuration
@@ -256,6 +270,19 @@ final class KeyboardRenderView: UIView {
                 if !swipeConsumedTouches.contains(touch) {
                     actionHandler?(kv.definition.action)
                 }
+                
+                // Record calibration sample for character keys.
+                // This trains the touch model to correct for systematic
+                // thumb drift (e.g., always hitting 3pt left of center).
+                if !swipeConsumedTouches.contains(touch),
+                   kv.definition.style == .standard {
+                    let pt = touch.location(in: self)
+                    let center = CGPoint(x: kv.frame.midX, y: kv.frame.midY)
+                    touchModel.recordCalibrationSample(
+                        touchPoint: pt,
+                        keyCenter: center
+                    )
+                }
 
                 if kv.definition.action == .backspace { deleteEndedHandler?() }
             }
@@ -282,15 +309,100 @@ final class KeyboardRenderView: UIView {
         hidePopup()
     }
 
-    // ── Hit testing ──────────────────────────
-
+    // ── Hit testing (Gaussian + Bigram) ─────
+ 
     private func hitKeyView(for touch: UITouch) -> KeyView? {
         let pt = touch.location(in: self)
+ 
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // FAST PATH: Exact rectangular hit on non-character keys.
+        // Modifiers, spacebar, utility keys use simple containment
+        // because they're large and don't benefit from probabilistic
+        // targeting. Checking these first avoids scoring them below.
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         for kv in keyViews {
+            guard kv.definition.style != .standard else { continue }
             let expanded = kv.frame.insetBy(dx: -2, dy: -2)
             if expanded.contains(pt) { return kv }
         }
-        return nil
+ 
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // PROBABILISTIC PATH: Score all character keys by Gaussian
+        // touch probability + optional bigram context weighting.
+        //
+        // The scale factor is passed to the touch model so that σy
+        // widens when keys are vertically compressed (0.75×–0.80×).
+        // This compensates for rows being closer together while the
+        // user's finger size stays constant.
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        var bestKey: KeyView?
+        var bestScore: CGFloat = -.greatestFiniteMagnitude
+ 
+        for kv in keyViews {
+            // Only score keys with .standard style (character keys).
+            // This includes letter keys and number keys.
+            guard kv.definition.style == .standard else { continue }
+ 
+            let center = CGPoint(x: kv.frame.midX, y: kv.frame.midY)
+ 
+            // Base score: Gaussian probability from finger position to key center.
+            // Passing self.scale lets the model widen σy for compact keyboards.
+            var score = touchModel.logProbability(
+                touchPoint: pt,
+                keyCenter: center,
+                scale: self.scale
+            )
+ 
+            // Bigram boost: if we know the previous character and this key
+            // is a letter, add the conditional probability weight.
+            // The bigramInfluence scaling factor (default 0.35) ensures
+            // geometry ALWAYS dominates — bigrams only tip the scale
+            // when a touch is right on the boundary between two keys.
+            if bigramInfluence > 0,
+               let prev = lastTypedCharacter,
+               case .character(let c) = kv.definition.action,
+               let next = c.lowercased().first {
+                score += bigramModel.weight(prev: prev, next: next) * bigramInfluence
+            }
+ 
+            if score > bestScore {
+                bestScore = score
+                bestKey = kv
+            }
+        }
+ 
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // REJECTION THRESHOLD: Discard touches too far from any key.
+        // A log-prob of -8.0 corresponds to roughly 4 standard deviations
+        // from the nearest key center — the touch is clearly off-keyboard.
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        guard bestScore > -8.0 else { return nil }
+ 
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // NEAREST-CENTROID FALLBACK: If no character key scored well
+        // enough but we're clearly in the keyboard area, fall back to
+        // the closest key by simple distance. This catches edge cases
+        // where the Gaussian model's sigma is too narrow.
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        if bestKey == nil {
+            var fallbackKey: KeyView?
+            var fallbackDist: CGFloat = .greatestFiniteMagnitude
+            for kv in keyViews {
+                let center = CGPoint(x: kv.frame.midX, y: kv.frame.midY)
+                let dist = (pt.x - center.x) * (pt.x - center.x)
+                         + (pt.y - center.y) * (pt.y - center.y)
+                if dist < fallbackDist {
+                    fallbackDist = dist
+                    fallbackKey = kv
+                }
+            }
+            // Reject if more than 40pt from any key center
+            if fallbackDist < 40.0 * 40.0 {
+                return fallbackKey
+            }
+        }
+ 
+        return bestKey
     }
 
     private func cancelLongPress(for touch: UITouch) {
