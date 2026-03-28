@@ -1,11 +1,3 @@
-//
-//  OnboardingConstants.swift
-//  Klayboard
-//
-//  Created by Zhi Zheng Yeo on 28/3/26.
-//
-
-
 // OnboardingViewController.swift
 // First-launch onboarding flow for Klay keyboard.
 //
@@ -294,6 +286,7 @@ private final class InstallPage: UIViewController {
     private let statusLabel = UILabel()
     private let continueButton = UIButton(type: .system)
     private var checkTimer: Timer?
+    private var hasVisitedSettings = false
 
     init(delegate: OnboardingPageDelegate) {
         self.delegate = delegate
@@ -328,7 +321,6 @@ private final class InstallPage: UIViewController {
 
         // ── Status indicator ──────────────────
         statusLabel.font = UIFont.systemFont(ofSize: 14, weight: .medium)
-        statusLabel.textColor = OnboardingConstants.subtleText
         statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 0
         updateStatus()
@@ -341,6 +333,8 @@ private final class InstallPage: UIViewController {
         continueButton.layer.cornerRadius = 12
         continueButton.addTarget(self, action: #selector(didTapContinue), for: .touchUpInside)
         continueButton.translatesAutoresizingMaskIntoConstraints = false
+        // Button is always fully visible — never dimmed
+        continueButton.alpha = 1.0
 
         // ── Layout ────────────────────────────
         let topStack = UIStackView(arrangedSubviews: [title, subtitle])
@@ -380,7 +374,8 @@ private final class InstallPage: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        // Poll for keyboard activation when user returns from Settings
+        updateStatus()
+        // Poll for keyboard activation (fires if user types with Klay elsewhere)
         checkTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.updateStatus()
         }
@@ -467,30 +462,35 @@ private final class InstallPage: UIViewController {
 
     private func isKeyboardActivated() -> Bool {
         let defaults = UserDefaults(suiteName: AppConstants.appGroupID)
-        // Check if the keyboard extension has ever loaded (writes a timestamp)
         return defaults?.object(forKey: OnboardingConstants.keyboardActivatedKey) != nil
     }
 
     private func updateStatus() {
         if isKeyboardActivated() {
-            statusLabel.text = "✓ Klay is enabled"
+            // Best case: the extension has actually loaded (user typed with Klay somewhere)
+            statusLabel.text = "✓ Klay is enabled and ready"
             statusLabel.textColor = UIColor.systemGreen
-            continueButton.alpha = 1.0
-        } else {
-            statusLabel.text = "Klay not detected yet.\nCome back after adding it in Settings."
+        } else if hasVisitedSettings {
+            // User went to Settings and came back — they probably added it
+            statusLabel.text = "Done adding Klay? Tap Continue.\nYou'll be able to try it on the next screen."
             statusLabel.textColor = OnboardingConstants.subtleText
-            continueButton.alpha = 0.5
+        } else {
+            // Initial state — haven't opened Settings yet
+            statusLabel.text = "Tap \"Open Settings\" above to get started."
+            statusLabel.textColor = OnboardingConstants.subtleText
         }
     }
 
     @objc private func didTapOpenSettings() {
+        hasVisitedSettings = true
         if let url = URL(string: UIApplication.openSettingsURLString) {
             UIApplication.shared.open(url)
         }
+        // Update status immediately so it's ready when user returns
+        updateStatus()
     }
 
     @objc private func didTapContinue() {
-        // Allow continuing even if not detected — the user might know what they're doing
         delegate?.onboardingAdvance()
     }
 }
@@ -844,8 +844,11 @@ private final class TryItPage: UIViewController {
     private let challenges = [
         ("Type anything", "Start typing a sentence"),
         ("Swipe down on \"1\"", "You should get \"!\""),
-        ("Double-tap shift", "Locks caps — tap again to unlock")
+        ("Double-tap shift", "Locks caps — tap again to unlock"),
+        ("Swipe up from spacebar", "Dismisses the keyboard — tap here to bring it back")
     ]
+
+    private var keyboardDismissed = false
 
     init(delegate: OnboardingPageDelegate) {
         self.delegate = delegate
@@ -853,9 +856,26 @@ private final class TryItPage: UIViewController {
     }
     required init?(coder: NSCoder) { fatalError() }
 
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = OnboardingConstants.stoneBackground
+
+        // Observe keyboard dismissal for challenge 4
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardDidHide),
+            name: UIResponder.keyboardDidHideNotification,
+            object: nil
+        )
+
+        // Tap anywhere to re-focus text view (bring keyboard back after dismissal)
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(didTapBackground))
+        tapGesture.cancelsTouchesInView = false
+        view.addGestureRecognizer(tapGesture)
 
         // ── Title ─────────────────────────────
         let title = UILabel()
@@ -1022,6 +1042,26 @@ private final class TryItPage: UIViewController {
             if uppercasePattern != nil {
                 challengeLabels[2].text = "●"
             }
+        }
+
+        // Challenge 4: keyboard was dismissed via swipe-up
+        if keyboardDismissed && challengeLabels.count > 3 {
+            challengeLabels[3].text = "●"
+        }
+    }
+
+    @objc private func keyboardDidHide() {
+        // Only count it if the text view was our first responder (not page transitions)
+        if !textView.isFirstResponder && !(textView.text ?? "").isEmpty {
+            keyboardDismissed = true
+            checkChallenges()
+        }
+    }
+
+    @objc private func didTapBackground() {
+        // Re-show the keyboard if it was dismissed
+        if !textView.isFirstResponder {
+            textView.becomeFirstResponder()
         }
     }
 
