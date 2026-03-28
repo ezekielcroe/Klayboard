@@ -276,6 +276,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Klayboard/ContainerApp-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = KlayBoard;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
@@ -318,6 +319,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Klayboard/ContainerApp-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = KlayBoard;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
@@ -477,7 +479,8 @@
 				DEVELOPMENT_TEAM = 9Y77PNP57U;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "KlayboardExtension/KeyboardExtension-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = KlayboardExtension;
+				INFOPLIST_KEY_CFBundleDisplayName = Klayboard;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -513,7 +516,8 @@
 				DEVELOPMENT_TEAM = 9Y77PNP57U;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "KlayboardExtension/KeyboardExtension-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = KlayboardExtension;
+				INFOPLIST_KEY_CFBundleDisplayName = Klayboard;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				LD_RUNPATH_SEARCH_PATHS = (
