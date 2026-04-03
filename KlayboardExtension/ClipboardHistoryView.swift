@@ -163,17 +163,22 @@ extension ClipboardHistoryView: UITableViewDataSource, UITableViewDelegate {
         let cell = tableView.dequeueReusableCell(withIdentifier: cellID, for: indexPath)
         let text = items[indexPath.row]
 
-        // Truncate long items for display
-        let preview = text.replacingOccurrences(of: "\n", with: " ↵ ")
-        let maxLen = 80
-        let displayText = preview.count > maxLen
-            ? String(preview.prefix(maxLen)) + "…"
-            : preview
+        // Build a preview that shows both the start and end of long items,
+        // so the user can identify which clipboard entry is which.
+        let flat = text.replacingOccurrences(of: "\n", with: " ↵ ")
+        let displayText: String
+        if flat.count > 80 {
+            let head = String(flat.prefix(40))
+            let tail = String(flat.suffix(25))
+            displayText = "\(head) … \(tail)  (\(text.count) chars)"
+        } else {
+            displayText = flat
+        }
 
         cell.textLabel?.text = displayText
         cell.textLabel?.font = UIFont.systemFont(ofSize: 14, weight: .regular)
         cell.textLabel?.textColor = .label
-        cell.textLabel?.numberOfLines = 2
+        cell.textLabel?.numberOfLines = 3
         cell.backgroundColor = .clear
         cell.selectionStyle = .default
 

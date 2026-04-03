@@ -37,6 +37,9 @@ final class KeyboardViewController: UIInputViewController {
     private var deleteRepeatCount: Int = 0
     private var deleteRepeatHasFired: Bool = false
 
+    // ── Toast overlay ────────────────────────
+    private var toastLabel: UILabel?
+
     // ── Sound ─────────────────────────────────
     private static let clickSoundID: SystemSoundID    = 1104
     private static let deleteSoundID: SystemSoundID   = 1155
@@ -387,19 +390,30 @@ final class KeyboardViewController: UIInputViewController {
         case .copy:
             if let text = textDocumentProxy.selectedText, !text.isEmpty {
                 UIPasteboard.general.string = text
+                if text.count >= 80 {
+                    showToast("Copied — may be truncated. Use system Copy for large selections.", warning: true)
+                } else {
+                    showToast("Copied")
+                }
             }
             
         case .cut:
             if let text = textDocumentProxy.selectedText, !text.isEmpty {
+                let mayBeTruncated = text.count >= 80
                 UIPasteboard.general.string = text
                 textDocumentProxy.deleteBackward()
                 resetInsertTracking()
                 macroEngine.resetBuffer()
+                if mayBeTruncated {
+                    showToast("Cut — clipboard may be truncated. Use system Cut for large selections.", warning: true)
+                } else {
+                    showToast("Cut")
+                }
             }
 
         case .paste:
             if let text = UIPasteboard.general.string {
-                textDocumentProxy.insertText(text)
+                insertLongText(text)
                 resetInsertTracking()
                 macroEngine.resetBuffer()
             }
@@ -490,6 +504,57 @@ final class KeyboardViewController: UIInputViewController {
         
         clipboardHistoryView = cv
     }
+
+    // ── Toast Overlay ─────────────────────────
+
+    /// Shows a brief overlay message at the top of the keyboard.
+    /// - Parameters:
+    ///   - message: The text to display.
+    ///   - warning: If true, uses a longer display duration and amber tint.
+    private func showToast(_ message: String, warning: Bool = false) {
+        // Remove any existing toast immediately
+        toastLabel?.removeFromSuperview()
+
+        let label = UILabel()
+        label.text = message
+        label.font = UIFont.systemFont(ofSize: 12, weight: .medium)
+        label.textColor = warning ? .white : .label
+        label.backgroundColor = warning
+            ? UIColor.systemOrange.withAlphaComponent(0.92)
+            : UIColor.secondarySystemBackground.withAlphaComponent(0.95)
+        label.textAlignment = .center
+        label.numberOfLines = 2
+        label.layer.cornerRadius = 8
+        label.layer.masksToBounds = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        // Padding via content insets isn't available on UILabel,
+        // so wrap in a container or just add spacing to the text.
+        // Keeping it simple: use a fixed-height constraint.
+        view.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            label.topAnchor.constraint(equalTo: view.topAnchor, constant: 6),
+            label.heightAnchor.constraint(greaterThanOrEqualToConstant: 32)
+        ])
+
+        toastLabel = label
+
+        // Fade in
+        label.alpha = 0
+        UIView.animate(withDuration: 0.15) { label.alpha = 1 }
+
+        // Auto-dismiss
+        let duration: TimeInterval = warning ? 3.0 : 1.2
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
+            guard self?.toastLabel === label else { return }
+            UIView.animate(withDuration: 0.25, animations: { label.alpha = 0 }) { _ in
+                label.removeFromSuperview()
+                if self?.toastLabel === label { self?.toastLabel = nil }
+            }
+        }
+    }
 }
 
 // ─────────────────────────────────────────────
@@ -508,10 +573,23 @@ enum ShiftState: Equatable {
 
 extension KeyboardViewController: ClipboardHistoryViewDelegate {
     func clipboardHistoryDidSelect(text: String) {
-        textDocumentProxy.insertText(text)
+        insertLongText(text)
         clipboardHistoryDidDismiss()
         resetInsertTracking()
         macroEngine.resetBuffer()
+    }
+
+    /// Inserts text through the document proxy in fixed-size chunks.
+    /// UITextDocumentProxy.insertText can silently truncate very long
+    /// strings in some host apps. Chunking avoids the limit entirely.
+    private func insertLongText(_ text: String) {
+        let chunkSize = 200
+        var remaining = text[...]
+        while !remaining.isEmpty {
+            let chunk = remaining.prefix(chunkSize)
+            textDocumentProxy.insertText(String(chunk))
+            remaining = remaining.dropFirst(chunk.count)
+        }
     }
     
     func clipboardHistoryDidDismiss() {
