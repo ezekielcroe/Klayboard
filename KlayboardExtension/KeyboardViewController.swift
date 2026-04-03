@@ -18,10 +18,13 @@ final class KeyboardViewController: UIInputViewController {
     private var previousLayoutID: LayoutID?
     private var lastInsertedChar: Character?
     private var secondLastInsertedChar: Character?
+    private var lastSpaceTapTime: TimeInterval = 0
 
     // ── Engines ────────────────────────────────
     private let macroEngine = MacroEngine()
     private let cursorEngine = CursorEngine()
+    private let clipboardHistory = ClipboardHistory()
+    private var clipboardHistoryView: ClipboardHistoryView?
     private var haptic: UIImpactFeedbackGenerator?
 
     // ── Rendering ──────────────────────────────
@@ -81,7 +84,6 @@ final class KeyboardViewController: UIInputViewController {
 
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
-        macroEngine.checkTrigger(proxy: textDocumentProxy)
     }
 
     override func didReceiveMemoryWarning() {
@@ -232,53 +234,80 @@ final class KeyboardViewController: UIInputViewController {
 
         // ── Basic input ──────────────────────────
         case .character(let c):
+            let previousShiftState = shiftState
+            
             let output: String
             switch shiftState {
             case .off:      output = c
             case .shifted:  output = c.uppercased(); shiftState = .off
             case .capsLock: output = c.uppercased()
             }
+            
             textDocumentProxy.insertText(output)
             trackInserted(output)
+            
+            // 1. Feed the local macro engine
+            macroEngine.feedKeystroke(output)
+            macroEngine.checkTriggerLocally(proxy: textDocumentProxy)
  
-            // Feed the typed character to the touch model for bigram weighting.
-            // Only lowercase letters a-z produce meaningful bigram context.
-            // Numbers, punctuation, and symbols → nil (neutral targeting).
+            // 2. Feed the bigram model
             if let ch = output.lowercased().first, ch >= "a", ch <= "z" {
                 keyboardView.lastTypedCharacter = ch
             } else {
                 keyboardView.lastTypedCharacter = nil
             }
  
-            // Lightweight update — only changes labels, no view rebuild
-            updateKeyboardView()
+            // 3. THE UI FIX: Only update the view if the shift state actually dropped!
+            if shiftState != previousShiftState {
+                updateKeyboardView()
+            }
 
         case .space:
-            if lastInsertedChar == " ",
+            let now = Date().timeIntervalSince1970
+            let isDoubleTap = (now - lastSpaceTapTime) < 0.5
+            lastSpaceTapTime = now
+
+            if isDoubleTap,
+               lastInsertedChar == " ",
                let prev = secondLastInsertedChar,
                !prev.isWhitespace, !prev.isPunctuation {
+                
                 textDocumentProxy.deleteBackward()
                 textDocumentProxy.insertText(". ")
-                trackInserted(". ")
-                if shiftState == .off { shiftState = .shifted; updateKeyboardView() }
+                
+                trackInserted(". ") // This correctly updates last=" ", secondLast="."
+                
+                // Keep local buffer perfectly in sync with the auto-period
+                macroEngine.handleBackspace()
+                macroEngine.feedKeystroke(". ")
+                macroEngine.checkTriggerLocally(proxy: textDocumentProxy)
+                
+                if shiftState == .off {
+                    shiftState = .shifted
+                    updateKeyboardView()
+                }
             } else {
                 textDocumentProxy.insertText(" ")
                 trackInserted(" ")
+                
+                macroEngine.feedKeystroke(" ")
+                macroEngine.checkTriggerLocally(proxy: textDocumentProxy)
             }
-            // Space breaks bigram context — next letter starts fresh
+            // Space breaks bigram context
             keyboardView.lastTypedCharacter = nil
 
         case .returnKey:
             textDocumentProxy.insertText("\n")
             trackInserted("\n")
-            // Newline breaks bigram context
             keyboardView.lastTypedCharacter = nil
+            macroEngine.resetBuffer() // Newlines break macro context
 
         case .backspace:
             if !deleteRepeatHasFired {
                 textDocumentProxy.deleteBackward()
             }
             resetInsertTracking()
+            macroEngine.handleBackspace()
 
         // ── Modifiers ────────────────────────────
         case .shift:
@@ -311,47 +340,72 @@ final class KeyboardViewController: UIInputViewController {
         case .moveCursorForward:
             textDocumentProxy.adjustTextPosition(byCharacterOffset: 1)
             resetInsertTracking()
+            macroEngine.resetBuffer()
 
         case .moveCursorBackward:
             textDocumentProxy.adjustTextPosition(byCharacterOffset: -1)
             resetInsertTracking()
+            macroEngine.resetBuffer()
 
         case .moveCursorForwardWord:
             cursorEngine.moveForwardByWord(proxy: textDocumentProxy)
             resetInsertTracking()
+            macroEngine.resetBuffer()
 
         case .moveCursorBackwardWord:
             cursorEngine.moveBackwardByWord(proxy: textDocumentProxy)
             resetInsertTracking()
+            macroEngine.resetBuffer()
 
         // ── Deletion ─────────────────────────────
         case .deleteWord:
             cursorEngine.deleteBackwardWord(proxy: textDocumentProxy)
             resetInsertTracking()
+            macroEngine.resetBuffer()
 
         case .deleteToLineStart:
             cursorEngine.deleteToLineStart(proxy: textDocumentProxy)
             resetInsertTracking()
+            macroEngine.resetBuffer()
 
         // ── Text manipulation ────────────────────
         case .toggleCase:
             cursorEngine.toggleCase(proxy: textDocumentProxy)
+            macroEngine.resetBuffer()
+
+        case .shiftTab:
+            cursorEngine.shiftTab(proxy: textDocumentProxy)
+            resetInsertTracking()
+            macroEngine.resetBuffer()
 
         case .insertMacro(let macroKey):
             macroEngine.executeMacro(named: macroKey, proxy: textDocumentProxy)
             resetInsertTracking()
+            macroEngine.resetBuffer()
 
         // ── Clipboard ────────────────────────────
         case .copy:
             if let text = textDocumentProxy.selectedText, !text.isEmpty {
                 UIPasteboard.general.string = text
             }
+            
+        case .cut:
+            if let text = textDocumentProxy.selectedText, !text.isEmpty {
+                UIPasteboard.general.string = text
+                textDocumentProxy.deleteBackward()
+                resetInsertTracking()
+                macroEngine.resetBuffer()
+            }
 
         case .paste:
             if let text = UIPasteboard.general.string {
                 textDocumentProxy.insertText(text)
                 resetInsertTracking()
+                macroEngine.resetBuffer()
             }
+            
+        case .showClipboardHistory:
+            showClipboardPanel()
 
         // ── Row toggle ───────────────────────────
         case .toggleUtilityRow:
@@ -415,6 +469,27 @@ final class KeyboardViewController: UIInputViewController {
         deleteRepeatCount = 0
         deleteRepeatHasFired = false
     }
+
+    // ── Clipboard Panel ────────────────────────
+
+    private func showClipboardPanel() {
+        guard clipboardHistoryView == nil else { return }
+        
+        clipboardHistory.pollClipboard()
+        let cv = ClipboardHistoryView(items: clipboardHistory.recentItems)
+        cv.delegate = self
+        cv.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(cv)
+        
+        NSLayoutConstraint.activate([
+            cv.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
+            cv.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
+            cv.topAnchor.constraint(equalTo: view.topAnchor, constant: 4),
+            cv.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -4)
+        ])
+        
+        clipboardHistoryView = cv
+    }
 }
 
 // ─────────────────────────────────────────────
@@ -425,4 +500,27 @@ enum ShiftState: Equatable {
     case off
     case shifted
     case capsLock
+}
+
+// ─────────────────────────────────────────────
+// MARK: - Clipboard History Delegate
+// ─────────────────────────────────────────────
+
+extension KeyboardViewController: ClipboardHistoryViewDelegate {
+    func clipboardHistoryDidSelect(text: String) {
+        textDocumentProxy.insertText(text)
+        clipboardHistoryDidDismiss()
+        resetInsertTracking()
+        macroEngine.resetBuffer()
+    }
+    
+    func clipboardHistoryDidDismiss() {
+        clipboardHistoryView?.removeFromSuperview()
+        clipboardHistoryView = nil
+    }
+    
+    func clipboardHistoryDidClear() {
+        clipboardHistory.clearAll()
+        clipboardHistoryView?.updateItems([])
+    }
 }

@@ -18,6 +18,7 @@ final class SettingsViewController: UITableViewController {
         case keyCustomization
         case feedback
         case macros
+        case data
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -31,6 +32,40 @@ final class SettingsViewController: UITableViewController {
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
         tableView.register(SliderCell.self, forCellReuseIdentifier: "slider")
         config = UserConfiguration.load()
+        
+        setupHeaderView()
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // MARK: - Header UI
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
+    private func setupHeaderView() {
+        let headerView = UIView(frame: CGRect(x: 0, y: 0, width: view.bounds.width, height: 110))
+        
+        let titleLabel = UILabel()
+        titleLabel.text = "KLAY"
+        titleLabel.font = .systemFont(ofSize: 34, weight: .black)
+        titleLabel.textColor = UIColor(red: 0.72, green: 0.52, blue: 0.32, alpha: 1.0) // Warm terracotta
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = "The power-user's customizable keyboard"
+        subtitleLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        subtitleLabel.textColor = .secondaryLabel
+        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        headerView.addSubview(titleLabel)
+        headerView.addSubview(subtitleLabel)
+        
+        NSLayoutConstraint.activate([
+            titleLabel.centerXAnchor.constraint(equalTo: headerView.centerXAnchor),
+            titleLabel.bottomAnchor.constraint(equalTo: headerView.centerYAnchor, constant: 4),
+            subtitleLabel.centerXAnchor.constraint(equalTo: headerView.centerXAnchor),
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4)
+        ])
+        
+        tableView.tableHeaderView = headerView
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -50,7 +85,8 @@ final class SettingsViewController: UITableViewController {
         case .height:           return 1
         case .keyCustomization: return 1
         case .feedback:         return 4
-        case .macros:           return config.macros.count + 1  // +1 for "Add Macro"
+        case .macros:           return config.macros.count + 1
+        case .data:             return 1
         }
     }
 
@@ -64,6 +100,7 @@ final class SettingsViewController: UITableViewController {
         case .keyCustomization: return "Key Customization"
         case .feedback:         return "Feedback"
         case .macros:           return "Text Expansion Macros"
+        case .data:             return "Data & Privacy"
         }
     }
 
@@ -79,6 +116,8 @@ final class SettingsViewController: UITableViewController {
         case .keyCustomization:
             let count = config.overrides.count
             return count > 0 ? "\(count) key\(count == 1 ? "" : "s") customized." : "Tap to remap any key's primary and long-press characters."
+        case .data:
+            return "Klay operates entirely on-device and never requests network access."
         default: return nil
         }
     }
@@ -93,29 +132,43 @@ final class SettingsViewController: UITableViewController {
         case .setup:
             let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
             cell.textLabel?.text = "Open Keyboard Settings"
-            cell.textLabel?.textColor = .systemBlue
+            cell.textLabel?.textColor = .label
+            cell.imageView?.image = UIImage(systemName: "gearshape.fill")
+            cell.imageView?.tintColor = .systemGray
             cell.accessoryType = .disclosureIndicator
             return cell
 
         case .layout:
             let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-            cell.accessoryView = nil // <--- 1. ADD THIS TO CLEAR RECYCLED SWITCHES
+            cell.accessoryView = nil
             
             let layouts: [LayoutID] = LayoutID.allCases.filter { $0 != .symbols }
             let id = layouts[indexPath.row]
             cell.textLabel?.text = BaseLayouts.all[id]?.displayName ?? id.rawValue
             cell.textLabel?.textColor = .label
             cell.accessoryType = (config.activeLayoutID == id) ? .checkmark : .none
+            
+            // Layout Icons
+            switch id {
+            case .standard: cell.imageView?.image = UIImage(systemName: "keyboard")
+            case .coding:   cell.imageView?.image = UIImage(systemName: "chevron.left.forwardslash.chevron.right")
+            case .markdown: cell.imageView?.image = UIImage(systemName: "text.format")
+            default: break
+            }
+            cell.imageView?.tintColor = .systemBlue
             return cell
 
         case .rows:
             let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-            cell.accessoryView = nil // <--- 2. ADD THIS TO CLEAR RECYCLED SWITCHES
+            cell.accessoryView = nil
             
             let mode = RowMode.allCases[indexPath.row]
             cell.textLabel?.text = mode.displayName
             cell.textLabel?.textColor = .label
             cell.accessoryType = (config.rowMode == mode) ? .checkmark : .none
+            
+            cell.imageView?.image = UIImage(systemName: mode == .fiveRows ? "rectangle.grid.1x2.fill" : "rectangle.grid.2x2.fill")
+            cell.imageView?.tintColor = .systemTeal
             return cell
 
         case .height:
@@ -136,7 +189,9 @@ final class SettingsViewController: UITableViewController {
         case .keyCustomization:
             let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
             cell.textLabel?.text = "Customize Keys…"
-            cell.textLabel?.textColor = .systemBlue
+            cell.textLabel?.textColor = .label
+            cell.imageView?.image = UIImage(systemName: "switch.2")
+            cell.imageView?.tintColor = .systemPurple
             cell.accessoryType = .disclosureIndicator
             return cell
 
@@ -146,6 +201,8 @@ final class SettingsViewController: UITableViewController {
             switch indexPath.row {
             case 0:
                 cell.textLabel?.text = "Haptic Feedback"
+                cell.imageView?.image = UIImage(systemName: "hand.tap.fill")
+                cell.imageView?.tintColor = .systemPink
                 let sw = UISwitch()
                 sw.isOn = config.hapticFeedbackEnabled
                 sw.tag = 0
@@ -153,6 +210,8 @@ final class SettingsViewController: UITableViewController {
                 cell.accessoryView = sw
             case 1:
                 cell.textLabel?.text = "Sound Feedback"
+                cell.imageView?.image = UIImage(systemName: "speaker.wave.2.fill")
+                cell.imageView?.tintColor = .systemIndigo
                 let sw = UISwitch()
                 sw.isOn = config.soundFeedbackEnabled
                 sw.tag = 1
@@ -160,6 +219,8 @@ final class SettingsViewController: UITableViewController {
                 cell.accessoryView = sw
             case 2:
                 cell.textLabel?.text = "Key Popups"
+                cell.imageView?.image = UIImage(systemName: "character.textbox")
+                cell.imageView?.tintColor = .systemOrange
                 let sw = UISwitch()
                 sw.isOn = config.showKeyPopups
                 sw.tag = 2
@@ -179,22 +240,41 @@ final class SettingsViewController: UITableViewController {
                     sliderCell.updateValueLabel(String(format: "%.2fs", val))
                 }
                 return sliderCell
-                default: break
-                }
-                return cell
+            default: break
+            }
+            return cell
 
         case .macros:
             let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
             if indexPath.row < config.macros.count {
                 let macro = config.macros[indexPath.row]
-                cell.textLabel?.text = "\(macro.trigger) → \(macro.expansion.prefix(40))"
+                
+                // Use a monospaced font for the trigger to make it look like code
+                let attrStr = NSMutableAttributedString(string: "\(macro.trigger)  →  \(macro.expansion.prefix(30))")
+                attrStr.addAttribute(.font, value: UIFont.monospacedSystemFont(ofSize: 15, weight: .semibold), range: NSRange(location: 0, length: macro.trigger.count))
+                
+                cell.textLabel?.attributedText = attrStr
                 cell.textLabel?.textColor = macro.isEnabled ? .label : .secondaryLabel
+                cell.imageView?.image = UIImage(systemName: "bolt.fill")
+                cell.imageView?.tintColor = .systemYellow
                 cell.accessoryType = .disclosureIndicator
             } else {
-                cell.textLabel?.text = "+ Add Macro"
+                cell.textLabel?.attributedText = nil
+                cell.textLabel?.text = "Add Macro"
                 cell.textLabel?.textColor = .systemBlue
+                cell.imageView?.image = UIImage(systemName: "plus.circle.fill")
+                cell.imageView?.tintColor = .systemBlue
                 cell.accessoryType = .none
             }
+            return cell
+            
+        case .data:
+            let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+            cell.textLabel?.text = "Clear Clipboard History"
+            cell.textLabel?.textColor = .systemRed
+            cell.imageView?.image = UIImage(systemName: "trash.fill")
+            cell.imageView?.tintColor = .systemRed
+            cell.accessoryType = .none
             return cell
         }
     }
@@ -237,6 +317,21 @@ final class SettingsViewController: UITableViewController {
             } else {
                 showAddMacro()
             }
+            
+        case .data:
+            let alert = UIAlertController(
+                title: "Clear Clipboard",
+                message: "This will permanently delete your stored clipboard history from the Klay App Group.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Clear History", style: .destructive) { _ in
+                // Directly remove the stored clipboard history key from the shared App Group
+                if let defaults = UserDefaults(suiteName: AppConstants.appGroupID) {
+                    defaults.removeObject(forKey: "clipboardHistory")
+                }
+            })
+            present(alert, animated: true)
 
         default: break
         }

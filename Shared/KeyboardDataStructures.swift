@@ -46,10 +46,13 @@ enum KeyAction: Codable, Hashable {
     // Text manipulation
     case toggleCase
     case insertMacro(String)
+    case shiftTab
 
-    // Clipboard (requires Full Access)
+    // Clipboard
     case copy
+    case cut
     case paste
+    case showClipboardHistory 
 
     // Row visibility
     case toggleUtilityRow

@@ -130,7 +130,6 @@ extension OnboardingViewController: OnboardingPageDelegate {
         let nav = UINavigationController(rootViewController: SettingsViewController())
 
         guard let window = view.window else {
-            // Fallback: just present
             present(nav, animated: true)
             return
         }
@@ -284,7 +283,7 @@ private final class InstallPage: UIViewController {
 
     weak var delegate: OnboardingPageDelegate?
     private let statusLabel = UILabel()
-    private let continueButton = UIButton(type: .system)
+    private let continueButton = makePrimaryButton(title: "Continue")
     private var checkTimer: Timer?
     private var hasVisitedSettings = false
 
@@ -326,15 +325,7 @@ private final class InstallPage: UIViewController {
         updateStatus()
 
         // ── Continue ──────────────────────────
-        continueButton.setTitle("Continue", for: .normal)
-        continueButton.titleLabel?.font = UIFont.systemFont(ofSize: 17, weight: .semibold)
-        continueButton.setTitleColor(.white, for: .normal)
-        continueButton.backgroundColor = OnboardingConstants.warmAccent
-        continueButton.layer.cornerRadius = 12
         continueButton.addTarget(self, action: #selector(didTapContinue), for: .touchUpInside)
-        continueButton.translatesAutoresizingMaskIntoConstraints = false
-        // Button is always fully visible — never dimmed
-        continueButton.alpha = 1.0
 
         // ── Layout ────────────────────────────
         let topStack = UIStackView(arrangedSubviews: [title, subtitle])
@@ -467,17 +458,20 @@ private final class InstallPage: UIViewController {
 
     private func updateStatus() {
         if isKeyboardActivated() {
-            // Best case: the extension has actually loaded (user typed with Klay somewhere)
+            // Best case: the extension has actually loaded
             statusLabel.text = "✓ Klay is enabled and ready"
             statusLabel.textColor = UIColor.systemGreen
+            continueButton.configuration?.title = "Next"
         } else if hasVisitedSettings {
-            // User went to Settings and came back — they probably added it
+            // User went to Settings and came back
             statusLabel.text = "Done adding Klay? Tap Continue.\nYou'll be able to try it on the next screen."
             statusLabel.textColor = OnboardingConstants.subtleText
+            continueButton.configuration?.title = "Continue"
         } else {
-            // Initial state — haven't opened Settings yet
+            // Initial state
             statusLabel.text = "Tap \"Open Settings\" above to get started."
             statusLabel.textColor = OnboardingConstants.subtleText
+            continueButton.configuration?.title = "Skip to Tour"
         }
     }
 
@@ -486,7 +480,6 @@ private final class InstallPage: UIViewController {
         if let url = URL(string: UIApplication.openSettingsURLString) {
             UIApplication.shared.open(url)
         }
-        // Update status immediately so it's ready when user returns
         updateStatus()
     }
 
@@ -516,7 +509,7 @@ private final class LayoutTourPage: UIViewController {
 
     // Row descriptions for the standard 6-row layout
     private let rowDescriptions = [
-        ("Utility Row",  "Cursor nav, word delete, copy/paste, case toggle"),
+        ("Utility Row",  "Cursor jumps, casing, tabs, clipboard history, and layout modes"),
         ("Number Row",   "Dedicated number keys — swipe down for symbols"),
         ("Top Alpha",    "Q–P with symbol alternates on every key"),
         ("Mid Alpha",    "A–L with punctuation alternates"),
@@ -541,7 +534,7 @@ private final class LayoutTourPage: UIViewController {
         diagramContainer.translatesAutoresizingMaskIntoConstraints = false
 
         let rowData: [(String, UIColor)] = [
-            ("◄◄  ►►  ◄  ►  ⌫  ⌫█  Aa  ⊡  📋", UIColor.systemGray5),
+            ("«   »   Aa   TAB   ⎘   📋   ⌫█   </>", UIColor.systemGray5),
             ("1   2   3   4   5   6   7   8   9   0", UIColor.systemGray4),
             ("q  w  e  r  t  y  u  i  o  p", UIColor.secondarySystemGroupedBackground),
             ("a  s  d  f  g  h  j  k  l", UIColor.secondarySystemGroupedBackground),
@@ -669,9 +662,9 @@ private final class LayoutTourPage: UIViewController {
         UIView.animate(withDuration: 0.3) {
             for (i, rv) in self.rowViews.enumerated() {
                 if i == index {
-                    rv.layer.borderWidth = 2.5
+                    rv.layer.borderWidth = 2.0
                     rv.layer.borderColor = OnboardingConstants.warmAccent.cgColor
-                    rv.transform = CGAffineTransform(scaleX: 1.02, y: 1.05)
+                    rv.transform = CGAffineTransform(scaleX: 1.03, y: 1.03)
                 } else {
                     rv.layer.borderWidth = 0
                     rv.layer.borderColor = UIColor.clear.cgColor
@@ -731,14 +724,14 @@ private final class HiddenPowersPage: UIViewController {
                 body: "Tap space twice quickly after a word and Klay inserts a period + space, then auto-shifts for the next sentence."
             ),
             makeFeatureCard(
-                icon: "delete.left",
-                title: "Smart Delete Acceleration",
-                body: "Tap delete to remove one character. Hold it to accelerate — first by character, then by whole word."
+                icon: "text.alignleft",
+                title: "Shift-Tab & Case Cycling",
+                body: "Swipe down on TAB to instantly un-indent. Tap Aa to cycle the previous word's casing: lower → Title → UPPER."
             ),
             makeFeatureCard(
-                icon: "textformat.alt",
-                title: "Case Cycling",
-                body: "The Aa button in the utility row cycles the previous word: lower → Title → UPPER → lower."
+                icon: "doc.on.clipboard",
+                title: "Local Clipboard History",
+                body: "Swipe down on the Paste icon to reveal a private, scrollable history of your recent copies right inside the keyboard."
             )
         ]
 
@@ -773,6 +766,7 @@ private final class HiddenPowersPage: UIViewController {
             cardStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             cardStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             cardStack.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: -8),
+            cardStack.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -40),
 
             nextButton.widthAnchor.constraint(equalToConstant: 260),
             nextButton.heightAnchor.constraint(equalToConstant: 50),
@@ -831,21 +825,27 @@ private final class HiddenPowersPage: UIViewController {
 
 
 // ══════════════════════════════════════════════════════
-// MARK: - PAGE 5: Try It
+// MARK: - PAGE 5: Try It (Dynamic Keyboard Avoidance)
 // ══════════════════════════════════════════════════════
 
 private final class TryItPage: UIViewController {
 
     weak var delegate: OnboardingPageDelegate?
+    
+    private let scrollView = UIScrollView()
+    private let contentView = UIView()
     private let textView = UITextView()
     private var challengeLabels: [UILabel] = []
+    private let doneButton = makePrimaryButton(title: "I'm Ready")
+    
+    private var doneButtonBottomConstraint: NSLayoutConstraint!
 
     // Challenges for the user to try
     private let challenges = [
         ("Type anything", "Start typing a sentence"),
         ("Swipe down on \"1\"", "You should get \"!\""),
         ("Double-tap shift", "Locks caps — tap again to unlock"),
-        ("Swipe up from spacebar", "Dismisses the keyboard — tap here to bring it back")
+        ("Swipe up from spacebar", "Dismisses the keyboard — tap to return")
     ]
 
     private var keyboardDismissed = false
@@ -864,20 +864,34 @@ private final class TryItPage: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = OnboardingConstants.stoneBackground
 
-        // Observe keyboard dismissal for challenge 4
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(keyboardDidHide),
-            name: UIResponder.keyboardDidHideNotification,
-            object: nil
-        )
+        setupKeyboardObservers()
 
-        // Tap anywhere to re-focus text view (bring keyboard back after dismissal)
+        // Tap anywhere to re-focus text view
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(didTapBackground))
         tapGesture.cancelsTouchesInView = false
         view.addGestureRecognizer(tapGesture)
+        
+        // ── Floating Action Button ────────────
+        doneButton.addTarget(self, action: #selector(didTapDone), for: .touchUpInside)
+        view.addSubview(doneButton)
+        
+        doneButtonBottomConstraint = doneButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -60)
+        NSLayoutConstraint.activate([
+            doneButton.widthAnchor.constraint(equalToConstant: 260),
+            doneButton.heightAnchor.constraint(equalToConstant: 50),
+            doneButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            doneButtonBottomConstraint
+        ])
 
-        // ── Title ─────────────────────────────
+        // ── Scrollable Content Area ───────────
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.showsVerticalScrollIndicator = false
+        view.addSubview(scrollView)
+        
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(contentView)
+
+        // ── Elements ──────────────────────────
         let title = UILabel()
         title.text = "Take It for a Spin"
         title.font = UIFont.systemFont(ofSize: 28, weight: .bold)
@@ -928,47 +942,52 @@ private final class TryItPage: UIViewController {
         challengeStack.spacing = 8
         challengeStack.translatesAutoresizingMaskIntoConstraints = false
 
-        for (title, hint) in challenges {
-            let row = makeChallengeRow(title: title, hint: hint)
+        for (t, hint) in challenges {
+            let row = makeChallengeRow(title: t, hint: hint)
             challengeStack.addArrangedSubview(row)
         }
 
-        // ── Finish button ─────────────────────
-        let doneButton = makePrimaryButton(title: "I'm Ready")
-        doneButton.addTarget(self, action: #selector(didTapDone), for: .touchUpInside)
-
-        view.addSubview(title)
-        view.addSubview(subtitle)
-        view.addSubview(textView)
-        view.addSubview(challengeTitle)
-        view.addSubview(challengeStack)
-        view.addSubview(doneButton)
+        contentView.addSubview(title)
+        contentView.addSubview(subtitle)
+        contentView.addSubview(textView)
+        contentView.addSubview(challengeTitle)
+        contentView.addSubview(challengeStack)
 
         NSLayoutConstraint.activate([
-            title.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 32),
-            title.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            // Scroll View bounds
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: doneButton.topAnchor, constant: -16),
+            
+            // Content View bounds
+            contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
+
+            // Inner elements
+            title.topAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.topAnchor, constant: 32),
+            title.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
 
             subtitle.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 8),
-            subtitle.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            subtitle.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 32),
-            subtitle.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -32),
+            subtitle.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            subtitle.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 32),
+            subtitle.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -32),
 
             textView.topAnchor.constraint(equalTo: subtitle.bottomAnchor, constant: 20),
-            textView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            textView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            textView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            textView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
             textView.heightAnchor.constraint(equalToConstant: 100),
 
             challengeTitle.topAnchor.constraint(equalTo: textView.bottomAnchor, constant: 20),
-            challengeTitle.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            challengeTitle.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
 
             challengeStack.topAnchor.constraint(equalTo: challengeTitle.bottomAnchor, constant: 10),
-            challengeStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            challengeStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-
-            doneButton.widthAnchor.constraint(equalToConstant: 260),
-            doneButton.heightAnchor.constraint(equalToConstant: 50),
-            doneButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            doneButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -60)
+            challengeStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            challengeStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            challengeStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20)
         ])
     }
 
@@ -977,6 +996,53 @@ private final class TryItPage: UIViewController {
         // Auto-focus the text view so the keyboard appears
         textView.becomeFirstResponder()
     }
+    
+    // ── Keyboard Avoidance ────────────────────
+
+    private func setupKeyboardObservers() {
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillShow), name: UIResponder.keyboardWillShowNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillHide), name: UIResponder.keyboardWillHideNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardDidHideChallenge), name: UIResponder.keyboardDidHideNotification, object: nil)
+    }
+
+    @objc private func keyboardWillShow(notification: NSNotification) {
+        guard let userInfo = notification.userInfo,
+              let kbFrame = userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+        
+        let duration = userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.3
+        let curveValue = userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int ?? UIView.AnimationCurve.easeOut.rawValue
+        
+        // Calculate how much to shift the button up.
+        // It should float just above the keyboard frame.
+        let safeAreaBottom = view.safeAreaInsets.bottom
+        let keyboardHeight = kbFrame.height
+        
+        // Push button exactly to the top of the keyboard + padding
+        let newConstant = -(keyboardHeight - safeAreaBottom + 16)
+        
+        doneButtonBottomConstraint.constant = newConstant
+        
+        UIView.animate(withDuration: duration, delay: 0, options: UIView.AnimationOptions(rawValue: UInt(curveValue << 16))) {
+            self.view.layoutIfNeeded()
+        }
+        
+        // Scroll slightly so challenges are visible if hidden
+        let bottomOffset = CGPoint(x: 0, y: max(0, scrollView.contentSize.height - scrollView.bounds.height))
+        scrollView.setContentOffset(bottomOffset, animated: true)
+    }
+
+    @objc private func keyboardWillHide(notification: NSNotification) {
+        let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.3
+        
+        // Restore standard bottom margin
+        doneButtonBottomConstraint.constant = -60
+        
+        UIView.animate(withDuration: duration) {
+            self.view.layoutIfNeeded()
+        }
+    }
+
+    // ── Challenges Logic ──────────────────────
 
     private func makeChallengeRow(title: String, hint: String) -> UIView {
         let container = UIView()
@@ -1050,7 +1116,7 @@ private final class TryItPage: UIViewController {
         }
     }
 
-    @objc private func keyboardDidHide() {
+    @objc private func keyboardDidHideChallenge() {
         // Only count it if the text view was our first responder (not page transitions)
         if !textView.isFirstResponder && !(textView.text ?? "").isEmpty {
             keyboardDismissed = true
@@ -1084,13 +1150,18 @@ extension TryItPage: UITextViewDelegate {
 // ══════════════════════════════════════════════════════
 
 /// Creates a styled primary action button used across all onboarding pages.
+/// Uses UIButton.Configuration for modern, built-in tap animations and alignment.
 private func makePrimaryButton(title: String) -> UIButton {
-    let button = UIButton(type: .system)
-    button.setTitle(title, for: .normal)
-    button.titleLabel?.font = UIFont.systemFont(ofSize: 17, weight: .semibold)
-    button.setTitleColor(.white, for: .normal)
-    button.backgroundColor = OnboardingConstants.warmAccent
-    button.layer.cornerRadius = 12
+    var config = UIButton.Configuration.filled()
+    config.title = title
+    config.baseBackgroundColor = OnboardingConstants.warmAccent
+    config.baseForegroundColor = .white
+    config.cornerStyle = .medium
+    
+    let font = UIFont.systemFont(ofSize: 17, weight: .semibold)
+    config.attributedTitle = AttributedString(title, attributes: AttributeContainer([.font: font]))
+    
+    let button = UIButton(configuration: config)
     button.translatesAutoresizingMaskIntoConstraints = false
     return button
 }

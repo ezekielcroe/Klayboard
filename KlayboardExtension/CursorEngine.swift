@@ -69,6 +69,35 @@ final class CursorEngine {
         guard dist > 0 else { return }
         proxy.adjustTextPosition(byCharacterOffset: dist)
     }
+    
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // MARK: - Indentation
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /// Reads backwards from the cursor. Removes 1 tab character, or up to 4 spaces.
+    func shiftTab(proxy: UITextDocumentProxy) {
+        guard let before = proxy.documentContextBeforeInput, !before.isEmpty else { return }
+        
+        // 1. If it's a hard tab, delete one character
+        if before.hasSuffix("\t") {
+            proxy.deleteBackward()
+            return
+        }
+        
+        // 2. If it's soft spaces, delete up to 4, stopping if we hit a non-space
+        var spacesToDelete = 0
+        for char in before.reversed() {
+            if char == " " && spacesToDelete < 4 {
+                spacesToDelete += 1
+            } else {
+                break
+            }
+        }
+        
+        for _ in 0..<spacesToDelete {
+            proxy.deleteBackward()
+        }
+    }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MARK: - Deletion

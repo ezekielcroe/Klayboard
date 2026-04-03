@@ -13,15 +13,16 @@ enum BaseLayouts {
     // Reusable row definitions to avoid duplication across layouts.
 
     static let utilityRow = LayoutRow(keys: [
-        KeyDefinition(id: "wordLeft",    label: "sf:chevron.left.2",        action: .moveCursorBackwardWord,  style: .utility),
-        KeyDefinition(id: "wordRight",   label: "sf:chevron.right.2",       action: .moveCursorForwardWord,   style: .utility),
-        KeyDefinition(id: "curLeft",     label: "sf:chevron.left",          action: .moveCursorBackward,      style: .utility),
-        KeyDefinition(id: "curRight",    label: "sf:chevron.right",         action: .moveCursorForward,       style: .utility),
-        KeyDefinition(id: "delWord",     label: "sf:delete.backward",       action: .deleteWord,              style: .utility),
-        KeyDefinition(id: "delLine",     label: "sf:delete.backward.fill",  action: .deleteToLineStart,       style: .utility),
-        KeyDefinition(id: "toggleCase",  label: "Aa",                       action: .toggleCase,              style: .utility),
-        KeyDefinition(id: "copy",        label: "sf:doc.on.doc",            action: .copy,                    style: .utility),
-        KeyDefinition(id: "paste",       label: "sf:doc.on.clipboard",      action: .paste,                   style: .utility),
+        KeyDefinition(id: "wordLeft",   label: "sf:chevron.left.2",   action: .moveCursorBackwardWord, altAction: .moveCursorBackward, style: .utility),
+        KeyDefinition(id: "wordRight",  label: "sf:chevron.right.2",  action: .moveCursorForwardWord,  altAction: .moveCursorForward,  style: .utility),
+        KeyDefinition(id: "format",     label: "Aa",                  action: .toggleCase,             altAction: .insertMacro("md_bold"), style: .utility),
+        KeyDefinition(id: "tab",        label: "TAB",                 action: .character("\t"),        altAction: .shiftTab,           style: .utility),
+        KeyDefinition(id: "copy",       label: "sf:doc.on.doc",       action: .copy,                   altAction: .cut,                style: .utility),
+        KeyDefinition(id: "paste",      label: "sf:doc.on.clipboard", action: .paste,                  altAction: .showClipboardHistory, style: .utility),
+        KeyDefinition(id: "delWord",    label: "sf:delete.backward",  action: .deleteWord,             altAction: .deleteToLineStart,  style: .utility),
+        
+        // Mode Switcher: Standard -> Coding (Uses code bracket icon)
+        KeyDefinition(id: "switchMode", label: "sf:chevron.left.forwardslash.chevron.right", action: .switchLayout(.coding), style: .utility),
     ], baseHeight: 38, tag: .utility)
 
     static let numberRow = LayoutRow(keys: [
@@ -106,15 +107,17 @@ enum BaseLayouts {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static let codingUtilityRow = LayoutRow(keys: [
-        KeyDefinition(id: "tab",       label: "TAB",                     action: .character("\t"),           style: .utility),
-        KeyDefinition(id: "wordLeft",  label: "sf:chevron.left.2",       action: .moveCursorBackwardWord,   style: .utility),
-        KeyDefinition(id: "wordRight", label: "sf:chevron.right.2",      action: .moveCursorForwardWord,    style: .utility),
-        KeyDefinition(id: "curLeft",   label: "sf:chevron.left",         action: .moveCursorBackward,       style: .utility),
-        KeyDefinition(id: "curRight",  label: "sf:chevron.right",        action: .moveCursorForward,        style: .utility),
-        KeyDefinition(id: "delWord",   label: "sf:delete.backward",      action: .deleteWord,               style: .utility),
-        KeyDefinition(id: "delLine",   label: "sf:delete.backward.fill", action: .deleteToLineStart,        style: .utility),
-        KeyDefinition(id: "copy",      label: "sf:doc.on.doc",           action: .copy,                     style: .utility),
-        KeyDefinition(id: "paste",     label: "sf:doc.on.clipboard",     action: .paste,                    style: .utility),
+        // Identical tools to Standard mode for muscle memory
+        KeyDefinition(id: "wordLeft",   label: "sf:chevron.left.2",   action: .moveCursorBackward, altAction: .moveCursorBackwardWord, style: .utility),
+        KeyDefinition(id: "wordRight",  label: "sf:chevron.right.2",  action: .moveCursorForward,  altAction: .moveCursorForwardWord,  style: .utility),
+        KeyDefinition(id: "format",     label: "Aa",                  action: .toggleCase,             altAction: .insertMacro("md_bold"), style: .utility),
+        KeyDefinition(id: "tab",        label: "TAB",                 action: .character("\t"),        altAction: .shiftTab,           style: .utility),
+        KeyDefinition(id: "copy",       label: "sf:doc.on.doc",       action: .copy,                   altAction: .cut,                style: .utility),
+        KeyDefinition(id: "paste",      label: "sf:doc.on.clipboard", action: .paste,                  altAction: .showClipboardHistory, style: .utility),
+        KeyDefinition(id: "delWord",    label: "sf:delete.backward",  action: .deleteWord,             altAction: .deleteToLineStart,  style: .utility),
+        
+        // Mode Switcher: Coding -> Markdown (Uses text formatting icon)
+        KeyDefinition(id: "switchMode", label: "sf:text.format",      action: .switchLayout(.markdown), style: .utility),
     ], baseHeight: 38, tag: .utility)
 
     static let codingBottomRow = LayoutRow(keys: [
@@ -152,16 +155,18 @@ enum BaseLayouts {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     static let markdownUtilityRow = LayoutRow(keys: [
-        KeyDefinition(id: "heading",   label: "H#",               action: .insertMacro("md_heading"),   style: .utility),
-        KeyDefinition(id: "bold",      label: "sf:bold",          action: .insertMacro("md_bold"),      style: .utility),
-        KeyDefinition(id: "italic",    label: "sf:italic",        action: .insertMacro("md_italic"),    style: .utility),
-        KeyDefinition(id: "code",      label: "</>",              action: .insertMacro("md_code"),      style: .utility),
-        KeyDefinition(id: "codeBlock", label: "```",              action: .insertMacro("md_codeblock"), style: .utility),
-        KeyDefinition(id: "link",      label: "sf:link",          action: .insertMacro("md_link"),      style: .utility),
-        KeyDefinition(id: "list",      label: "sf:list.bullet",   action: .insertMacro("md_list"),      style: .utility),
-        KeyDefinition(id: "quote",     label: "sf:text.quote",    action: .insertMacro("md_quote"),     style: .utility),
-        KeyDefinition(id: "hr",        label: "───",              action: .insertMacro("md_hr"),        style: .utility),
-    ], baseHeight: 38, tag: .utility)
+       // Markdown macros
+       KeyDefinition(id: "heading",   label: "H#",               action: .insertMacro("md_heading"),   style: .utility),
+       KeyDefinition(id: "bold",      label: "sf:bold",          action: .insertMacro("md_bold"),      style: .utility),
+       KeyDefinition(id: "italic",    label: "sf:italic",        action: .insertMacro("md_italic"),    style: .utility),
+       KeyDefinition(id: "codeBlock", label: "```",              action: .insertMacro("md_codeblock"), style: .utility),
+       KeyDefinition(id: "link",      label: "sf:link",          action: .insertMacro("md_link"),      style: .utility),
+       KeyDefinition(id: "list",      label: "sf:list.bullet",   action: .insertMacro("md_list"),      style: .utility),
+       KeyDefinition(id: "quote",     label: "sf:text.quote",    action: .insertMacro("md_quote"),     style: .utility),
+       
+       // Mode Switcher: Markdown -> Standard (Uses standard slider icon)
+       KeyDefinition(id: "switchMode",label: "sf:slider.horizontal.3", action: .switchLayout(.standard), style: .utility),
+   ], baseHeight: 38, tag: .utility)
 
     static let markdown = KeyboardLayout(
         id: .markdown,

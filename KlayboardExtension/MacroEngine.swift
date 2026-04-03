@@ -1,6 +1,6 @@
 // MacroEngine.swift
 // Local text expansion engine.
-// Monitors documentContextBeforeInput for trigger strings and replaces them with expansions.
+// Monitors a local buffer for trigger strings and replaces them with expansions.
 // Zero network access — everything runs in-process.
 
 import UIKit
@@ -16,9 +16,13 @@ final class MacroEngine {
     private var cursorOffsets: [String: Int] = BuiltInMacros.cursorOffsets
 
     /// Trigger-based macros (e.g., "@@" → "user@example.com").
-    /// These are checked against the trailing text after every keystroke.
+    /// These are checked against the local trailing text buffer after every keystroke.
     private var triggerMacros: [String: String] = [:]
     private var maxTriggerLength: Int = 0
+
+    // ── Local tracking buffer ────────────────
+    private var recentTypingBuffer: String = ""
+    private let maxBufferLength: Int = 15 // Keeps memory footprint virtually zero
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MARK: - Loading
@@ -50,30 +54,57 @@ final class MacroEngine {
         if let offset = cursorOffsets[key], offset > 0 {
             proxy.adjustTextPosition(byCharacterOffset: -offset)
         }
+        
+        // Wipe the buffer because text was manipulated
+        resetBuffer()
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // MARK: - Trigger Detection
+    // MARK: - Local Buffer Management
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /// Called after every text change to check if the user just typed a trigger.
-    /// This is O(triggers × maxTriggerLength) but both are small (~dozens).
-    func checkTrigger(proxy: UITextDocumentProxy) {
-        guard maxTriggerLength > 0 else { return }
-        guard let before = proxy.documentContextBeforeInput else { return }
-        guard !before.isEmpty else { return }
+    /// Feed a newly typed character into the local buffer
+    func feedKeystroke(_ text: String) {
+        recentTypingBuffer.append(text)
+        if recentTypingBuffer.count > maxBufferLength {
+            recentTypingBuffer.removeFirst(recentTypingBuffer.count - maxBufferLength)
+        }
+    }
 
-        // Only inspect the tail of the string (up to longest trigger length)
-        let tail = String(before.suffix(maxTriggerLength + 2)) // +2 for safety
+    /// Remove the last character if the user hits backspace
+    func handleBackspace() {
+        if !recentTypingBuffer.isEmpty {
+            recentTypingBuffer.removeLast()
+        }
+    }
+
+    /// Clear the buffer (call this when the cursor is manually moved)
+    func resetBuffer() {
+        recentTypingBuffer = ""
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // MARK: - Trigger Detection (Optimized)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /// Checks the local buffer for a trigger. NO synchronous proxy reads!
+    func checkTriggerLocally(proxy: UITextDocumentProxy) {
+        guard maxTriggerLength > 0 else { return }
+        guard !recentTypingBuffer.isEmpty else { return }
 
         for (trigger, expansion) in triggerMacros {
-            if tail.hasSuffix(trigger) {
-                // Delete the trigger characters
+            if recentTypingBuffer.hasSuffix(trigger) {
+                
+                // MATCH FOUND! Now we are allowed to talk to the proxy.
                 for _ in 0..<trigger.count {
                     proxy.deleteBackward()
                 }
+                
                 // Insert the expansion
                 proxy.insertText(expansion)
+                
+                // Wipe the buffer so we don't double-fire
+                resetBuffer()
                 return // Only fire one macro per keystroke
             }
         }
