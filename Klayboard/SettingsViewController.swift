@@ -83,7 +83,7 @@ final class SettingsViewController: UITableViewController {
         case .layout:           return LayoutID.allCases.filter { $0 != .symbols }.count
         case .rows:             return RowMode.allCases.count
         case .height:           return 1
-        case .keyCustomization: return 1
+        case .keyCustomization: return AltScheme.allCases.count
         case .feedback:         return 4
         case .macros:           return config.macros.count + 1
         case .data:             return 1
@@ -115,7 +115,10 @@ final class SettingsViewController: UITableViewController {
             return "Adjust the height of all keys. Drag left for compact, right for taller keys."
         case .keyCustomization:
             let count = config.overrides.count
-            return count > 0 ? "\(count) key\(count == 1 ? "" : "s") customized." : "Tap to remap any key's primary and long-press characters."
+            if count > 0 {
+                return "Choose which symbols appear on swipe-down. Tap ⓘ to remap individual keys. \(count) key\(count == 1 ? "" : "s") customized."
+            }
+            return "Choose which symbols appear on swipe-down. Tap ⓘ to remap individual keys."
         case .data:
             return "Klay operates entirely on-device and never requests network access."
         default: return nil
@@ -144,7 +147,7 @@ final class SettingsViewController: UITableViewController {
             
             let layouts: [LayoutID] = LayoutID.allCases.filter { $0 != .symbols }
             let id = layouts[indexPath.row]
-            cell.textLabel?.text = BaseLayouts.all[id]?.displayName ?? id.rawValue
+            cell.textLabel?.text = displayName(for: id)
             cell.textLabel?.textColor = .label
             cell.accessoryType = (config.activeLayoutID == id) ? .checkmark : .none
             
@@ -187,13 +190,7 @@ final class SettingsViewController: UITableViewController {
             return cell
 
         case .keyCustomization:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-            cell.textLabel?.text = "Customize Keys…"
-            cell.textLabel?.textColor = .label
-            cell.imageView?.image = UIImage(systemName: "switch.2")
-            cell.imageView?.tintColor = .systemPurple
-            cell.accessoryType = .disclosureIndicator
-            return cell
+            return altSchemeCell(for: indexPath, in: tableView)
 
         case .feedback:
             let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
@@ -280,6 +277,78 @@ final class SettingsViewController: UITableViewController {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // MARK: - Alt Scheme Cells
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /// Builds a cell for one alt-character scheme.
+    ///
+    /// Two tap targets per row (standard iOS detail-button pattern):
+    /// - Tap the row body  → selects this scheme as the active alt layout
+    /// - Tap the ⓘ button → pushes to the per-key customizer
+    private func altSchemeCell(for indexPath: IndexPath, in tableView: UITableView) -> UITableViewCell {
+        // Use .subtitle style for two-line display (name + description).
+        // Manual dequeue because UITableView.register always returns .default style.
+        let reuseID = "schemeCell"
+        let cell: UITableViewCell
+        if let reused = tableView.dequeueReusableCell(withIdentifier: reuseID) {
+            cell = reused
+        } else {
+            cell = UITableViewCell(style: .subtitle, reuseIdentifier: reuseID)
+        }
+
+        let schemes = AltScheme.allCases
+        let scheme = schemes[indexPath.row]
+        let isSelected = (config.altScheme == scheme)
+
+        // ── Text ──────────────────────────────
+        cell.textLabel?.text = displayName(for: scheme)
+        cell.textLabel?.textColor = .label
+        cell.textLabel?.font = .systemFont(ofSize: 17, weight: isSelected ? .semibold : .regular)
+
+        cell.detailTextLabel?.text = subtitle(for: scheme)
+        cell.detailTextLabel?.textColor = .secondaryLabel
+        cell.detailTextLabel?.font = .systemFont(ofSize: 13, weight: .regular)
+
+        // ── Selection indicator (leading image) ──
+        let iconName = isSelected ? "checkmark.circle.fill" : "circle"
+        let iconConfig = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+        cell.imageView?.image = UIImage(systemName: iconName, withConfiguration: iconConfig)
+        cell.imageView?.tintColor = isSelected ? .systemBlue : .systemGray3
+
+        // ── Detail button (trailing ⓘ) ───────
+        // Tapping this fires accessoryButtonTappedForRowWith → pushes to per-key customizer
+        cell.accessoryType = .detailButton
+
+        return cell
+    }
+
+    /// Display name for an alt-character scheme.
+    private func displayName(for scheme: AltScheme) -> String {
+        switch scheme {
+        case .familiar: return "Familiar"
+        case .grouped:  return "Grouped"
+        }
+    }
+
+    /// Descriptive subtitle shown below the scheme name.
+    private func subtitle(for scheme: AltScheme) -> String {
+        switch scheme {
+        case .familiar: return "US keyboard layout · writing shortcuts on home row"
+        case .grouped:  return "Symbols clustered by function · math · punctuation · brackets"
+        }
+    }
+
+    /// Display name for a layout ID (replaces the removed BaseLayouts.all dictionary).
+    private func displayName(for id: LayoutID) -> String {
+        switch id {
+        case .standard: return "Standard"
+        case .coding:   return "Coding"
+        case .markdown: return "Markdown"
+        case .symbols:  return "Symbols"
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MARK: - Selection
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -305,11 +374,14 @@ final class SettingsViewController: UITableViewController {
             tableView.reloadSections(IndexSet(integer: section.rawValue), with: .none)
 
         case .keyCustomization:
-            let vc = KeyCustomizationViewController()
-            vc.config = config
-            vc.layoutID = config.activeLayoutID
-            vc.delegate = self
-            navigationController?.pushViewController(vc, animated: true)
+            // Tap the row body → select this alt-character scheme
+            let schemes = AltScheme.allCases
+            let selected = schemes[indexPath.row]
+            guard config.altScheme != selected else { return }
+
+            config.altScheme = selected
+            saveConfig()
+            tableView.reloadSections(IndexSet(integer: section.rawValue), with: .none)
 
         case .macros:
             if indexPath.row < config.macros.count {
@@ -326,7 +398,6 @@ final class SettingsViewController: UITableViewController {
             )
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
             alert.addAction(UIAlertAction(title: "Clear History", style: .destructive) { _ in
-                // Directly remove the stored clipboard history key from the shared App Group
                 if let defaults = UserDefaults(suiteName: AppConstants.appGroupID) {
                     defaults.removeObject(forKey: "clipboardHistory")
                 }
@@ -336,6 +407,35 @@ final class SettingsViewController: UITableViewController {
         default: break
         }
     }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // MARK: - Detail Button (ⓘ) → Per-Key Customizer
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    override func tableView(_ tableView: UITableView, accessoryButtonTappedForRowWith indexPath: IndexPath) {
+        guard Section(rawValue: indexPath.section) == .keyCustomization else { return }
+
+        // Tapping ⓘ on a scheme row:
+        // 1. Select the tapped scheme (so the customizer shows the right alts)
+        // 2. Push to the per-key customizer
+        let schemes = AltScheme.allCases
+        let tapped = schemes[indexPath.row]
+        if config.altScheme != tapped {
+            config.altScheme = tapped
+            saveConfig()
+            tableView.reloadSections(IndexSet(integer: indexPath.section), with: .none)
+        }
+
+        let vc = KeyCustomizationViewController()
+        vc.config = config
+        vc.layoutID = config.activeLayoutID
+        vc.delegate = self
+        navigationController?.pushViewController(vc, animated: true)
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // MARK: - Editing Support
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     override func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
         guard let section = Section(rawValue: indexPath.section) else { return false }
@@ -457,16 +557,13 @@ final class SliderCell: UITableViewCell {
         contentView.addSubview(valueLabel)
 
         NSLayoutConstraint.activate([
-            // Pin title to the left with a fixed width
             titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             titleLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             titleLabel.widthAnchor.constraint(equalToConstant: 90),
 
-            // Pin slider between title and value label
             slider.leadingAnchor.constraint(equalTo: titleLabel.trailingAnchor, constant: 8),
             slider.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
 
-            // Pin value label to the right with a fixed width
             valueLabel.leadingAnchor.constraint(equalTo: slider.trailingAnchor, constant: 12),
             valueLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
             valueLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),

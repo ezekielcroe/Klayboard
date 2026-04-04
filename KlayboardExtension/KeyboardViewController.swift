@@ -144,7 +144,7 @@ final class KeyboardViewController: UIInputViewController {
 
     /// Full rebuild — called when layout, row mode, or overrides change.
     private func rebuildLayout() {
-        var base = BaseLayouts.layout(for: config.activeLayoutID, rowMode: config.rowMode)
+        var base = BaseLayouts.layout(for: config.activeLayoutID, rowMode: config.rowMode, altScheme: config.altScheme)
 
         if !needsInputModeSwitchKey {
             base = base.removingKey(withID: "globe")

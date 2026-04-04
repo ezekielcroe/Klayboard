@@ -132,6 +132,12 @@ enum RowTag: String, Codable, Hashable {
 // MARK: - Layout Identifier
 // ─────────────────────────────────────────────
 
+/// Which alt-character mapping appears on swipe-down / long-press.
+enum AltScheme: String, Codable, CaseIterable {
+    case familiar   // US keyboard-inspired, writing-friendly
+    case grouped    // Characters grouped by function in spatial clusters
+}
+
 enum LayoutID: String, Codable, Hashable, CaseIterable {
     case standard
     case coding
@@ -266,6 +272,7 @@ struct HeightConfiguration: Codable, Hashable {
 
 struct UserConfiguration: Codable {
     var activeLayoutID: LayoutID
+    var altScheme: AltScheme
     var rowMode: RowMode
     var macros: [MacroDefinition]
     var overrides: [UserOverride]
@@ -277,6 +284,7 @@ struct UserConfiguration: Codable {
 
     static let `default` = UserConfiguration(
         activeLayoutID: .standard,
+        altScheme: .familiar,
         rowMode: .sixRows,
         macros: [],
         overrides: [],
