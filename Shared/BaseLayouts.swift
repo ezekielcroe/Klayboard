@@ -32,10 +32,11 @@ enum BaseLayouts {
     ], baseHeight: 38, tag: .utility)
 
     static let spacebarRow = LayoutRow(keys: [
-        KeyDefinition(id: "symbols", label: "123",            action: .switchLayout(.symbols), widthMultiplier: 1.3, style: .modifier),
-        KeyDefinition(id: "globe",   label: "sf:globe",       action: .nextKeyboard,           style: .modifier),
-        KeyDefinition(id: "space",   label: " ",              action: .space, swipeUpAction: .dismissKeyboard, widthMultiplier: 5.5, style: .spacebar),
-        KeyDefinition(id: "return",  label: "return",         action: .returnKey,              widthMultiplier: 1.5, style: .modifier),
+        KeyDefinition(id: "symbols", label: "123",             action: .switchLayout(.symbols), widthMultiplier: 1.3, style: .modifier),
+        KeyDefinition(id: "globe",   label: "sf:globe",        action: .nextKeyboard,           style: .modifier),
+        KeyDefinition(id: "emoji",   label: "sf:face.smiling", action: .showEmojiPicker,        style: .modifier),
+        KeyDefinition(id: "space",   label: " ",               action: .space, swipeUpAction: .dismissKeyboard, widthMultiplier: 4.5, style: .spacebar),
+        KeyDefinition(id: "return",  label: "return",          action: .returnKey,              widthMultiplier: 1.5, style: .modifier),
     ], baseHeight: 44, tag: .bottom)
 
     static let spacebarRowWithToggle = LayoutRow(keys: [
@@ -127,7 +128,7 @@ enum BaseLayouts {
     //  1→+  2→−  3→#  4→$  5→%  6→^  7→&  8→*  9→(  0→)
     //  q→×  w→÷  e→<  r→>  t→[  y→]  u→;  i→:  o→!  p→?
     //  a→=  s→|  d→\  f→{  g→}  h→'  j→"  k→@  l→/
-    //  z→°  x→~  c→`  v→—  b→…  n→,  m→.
+    //  z→°  x→~  c→`  v→_  b→…  n→,  m→.
     //
     // Cluster map:
     //  ┌─────────┐ ┌───────┐ ┌─────────┐ ┌─────────┐
@@ -179,7 +180,7 @@ enum BaseLayouts {
         KeyDefinition(id: "z",     label: "z",              action: .character("z"),   altAction: .character("\u{00B0}")), // °
         KeyDefinition(id: "x",     label: "x",              action: .character("x"),   altAction: .character("~")),
         KeyDefinition(id: "c",     label: "c",              action: .character("c"),   altAction: .character("`")),
-        KeyDefinition(id: "v",     label: "v",              action: .character("v"),   altAction: .character("\u{2014}")), // —
+        KeyDefinition(id: "v",     label: "v",              action: .character("v"),   altAction: .character("_")), //
         KeyDefinition(id: "b",     label: "b",              action: .character("b"),   altAction: .character("\u{2026}")), // …
         KeyDefinition(id: "n",     label: "n",              action: .character("n"),   altAction: .character(",")),
         KeyDefinition(id: "m",     label: "m",              action: .character("m"),   altAction: .character(".")),

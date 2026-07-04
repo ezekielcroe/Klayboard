@@ -26,6 +26,7 @@ final class KeyboardViewController: UIInputViewController {
     private let clipboardHistory = ClipboardHistory()
     private var clipboardHistoryView: ClipboardHistoryView?
     private var haptic: UIImpactFeedbackGenerator?
+    private var emojiPickerView: EmojiPickerView?
 
     // ── Rendering ──────────────────────────────
     private var keyboardView: KeyboardRenderView!
@@ -53,7 +54,7 @@ final class KeyboardViewController: UIInputViewController {
         super.viewDidLoad()
         loadConfiguration()
         buildKeyboardView()
- 
+
         let defaults = UserDefaults(suiteName: AppConstants.appGroupID)
         defaults?.set(Date().timeIntervalSince1970, forKey: "keyboardExtensionActivated")
         defaults?.synchronize()
@@ -64,7 +65,7 @@ final class KeyboardViewController: UIInputViewController {
         loadConfiguration()
         rebuildLayout()
     }
-    
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         updateHeight()
@@ -116,9 +117,9 @@ final class KeyboardViewController: UIInputViewController {
 
     private func buildKeyboardView() {
         keyboardView = KeyboardRenderView()
-        
+
         keyboardView.translatesAutoresizingMaskIntoConstraints = false
-        
+
         keyboardView.actionHandler = { [weak self] action in
             self?.handleAction(action)
         }
@@ -132,13 +133,13 @@ final class KeyboardViewController: UIInputViewController {
             self?.stopDeleteRepeat()
         }
         view.addSubview(keyboardView)
-        
+
         NSLayoutConstraint.activate([
             keyboardView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             keyboardView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             keyboardView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
-        
+
         rebuildLayout()
     }
 
@@ -162,9 +163,9 @@ final class KeyboardViewController: UIInputViewController {
             mode: config.rowMode,
             utilityExpanded: utilityRowExpanded
         )
-        
+
         keyboardView.longPressDuration = config.longPressDuration
-        
+
         keyboardView.configure(
             rows: rows,
             scale: config.height.clamped,
@@ -191,7 +192,7 @@ final class KeyboardViewController: UIInputViewController {
             heightConstraint?.priority = UILayoutPriority(rawValue: 999)
             heightConstraint?.isActive = true
         }
-        
+
         // 2. Constrain our Custom Keyboard Container
         if let containerConstraint = containerHeightConstraint {
             if containerConstraint.constant != totalHeight {
@@ -238,28 +239,28 @@ final class KeyboardViewController: UIInputViewController {
         // ── Basic input ──────────────────────────
         case .character(let c):
             let previousShiftState = shiftState
-            
+
             let output: String
             switch shiftState {
             case .off:      output = c
             case .shifted:  output = c.uppercased(); shiftState = .off
             case .capsLock: output = c.uppercased()
             }
-            
+
             textDocumentProxy.insertText(output)
             trackInserted(output)
-            
+
             // 1. Feed the local macro engine
             macroEngine.feedKeystroke(output)
             macroEngine.checkTriggerLocally(proxy: textDocumentProxy)
- 
+
             // 2. Feed the bigram model
             if let ch = output.lowercased().first, ch >= "a", ch <= "z" {
                 keyboardView.lastTypedCharacter = ch
             } else {
                 keyboardView.lastTypedCharacter = nil
             }
- 
+
             // 3. THE UI FIX: Only update the view if the shift state actually dropped!
             if shiftState != previousShiftState {
                 updateKeyboardView()
@@ -274,17 +275,17 @@ final class KeyboardViewController: UIInputViewController {
                lastInsertedChar == " ",
                let prev = secondLastInsertedChar,
                !prev.isWhitespace, !prev.isPunctuation {
-                
+
                 textDocumentProxy.deleteBackward()
                 textDocumentProxy.insertText(". ")
-                
+
                 trackInserted(". ") // This correctly updates last=" ", secondLast="."
-                
+
                 // Keep local buffer perfectly in sync with the auto-period
                 macroEngine.handleBackspace()
                 macroEngine.feedKeystroke(". ")
                 macroEngine.checkTriggerLocally(proxy: textDocumentProxy)
-                
+
                 if shiftState == .off {
                     shiftState = .shifted
                     updateKeyboardView()
@@ -292,7 +293,7 @@ final class KeyboardViewController: UIInputViewController {
             } else {
                 textDocumentProxy.insertText(" ")
                 trackInserted(" ")
-                
+
                 macroEngine.feedKeystroke(" ")
                 macroEngine.checkTriggerLocally(proxy: textDocumentProxy)
             }
@@ -396,7 +397,7 @@ final class KeyboardViewController: UIInputViewController {
                     showToast("Copied")
                 }
             }
-            
+
         case .cut:
             if let text = textDocumentProxy.selectedText, !text.isEmpty {
                 let mayBeTruncated = text.count >= 80
@@ -417,9 +418,12 @@ final class KeyboardViewController: UIInputViewController {
                 resetInsertTracking()
                 macroEngine.resetBuffer()
             }
-            
+
         case .showClipboardHistory:
             showClipboardPanel()
+
+        case .showEmojiPicker:
+            showEmojiPanel()
 
         // ── Row toggle ───────────────────────────
         case .toggleUtilityRow:
@@ -488,21 +492,38 @@ final class KeyboardViewController: UIInputViewController {
 
     private func showClipboardPanel() {
         guard clipboardHistoryView == nil else { return }
-        
+
         clipboardHistory.pollClipboard()
         let cv = ClipboardHistoryView(items: clipboardHistory.recentItems)
         cv.delegate = self
         cv.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(cv)
-        
+
         NSLayoutConstraint.activate([
             cv.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
             cv.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
             cv.topAnchor.constraint(equalTo: view.topAnchor, constant: 4),
             cv.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -4)
         ])
-        
+
         clipboardHistoryView = cv
+    }
+
+    // ── Emoji Picker ────────────────────────
+
+    private func showEmojiPanel() {
+        guard emojiPickerView == nil else { return }
+        let ev = EmojiPickerView(frame: .zero)
+        ev.delegate = self
+        ev.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(ev)
+        NSLayoutConstraint.activate([
+            ev.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
+            ev.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
+            ev.topAnchor.constraint(equalTo: view.topAnchor, constant: 4),
+            ev.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -4)
+        ])
+        emojiPickerView = ev
     }
 
     // ── Toast Overlay ─────────────────────────
@@ -568,6 +589,28 @@ enum ShiftState: Equatable {
 }
 
 // ─────────────────────────────────────────────
+// MARK: - Emoji Picker Delegate
+// ─────────────────────────────────────────────
+
+extension KeyboardViewController: EmojiPickerViewDelegate {
+    func emojiPickerDidSelect(emoji: String) {
+        textDocumentProxy.insertText(emoji)
+        emojiPickerView?.recordUse(of: emoji)
+        resetInsertTracking()
+        macroEngine.resetBuffer()
+    }
+
+    func emojiPickerDidTapBackspace() {
+        textDocumentProxy.deleteBackward()
+    }
+
+    func emojiPickerDidDismiss() {
+        emojiPickerView?.removeFromSuperview()
+        emojiPickerView = nil
+    }
+}
+
+// ─────────────────────────────────────────────
 // MARK: - Clipboard History Delegate
 // ─────────────────────────────────────────────
 
@@ -591,12 +634,12 @@ extension KeyboardViewController: ClipboardHistoryViewDelegate {
             remaining = remaining.dropFirst(chunk.count)
         }
     }
-    
+
     func clipboardHistoryDidDismiss() {
         clipboardHistoryView?.removeFromSuperview()
         clipboardHistoryView = nil
     }
-    
+
     func clipboardHistoryDidClear() {
         clipboardHistory.clearAll()
         clipboardHistoryView?.updateItems([])

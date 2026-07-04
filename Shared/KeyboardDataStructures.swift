@@ -52,7 +52,8 @@ enum KeyAction: Codable, Hashable {
     case copy
     case cut
     case paste
-    case showClipboardHistory 
+    case showClipboardHistory
+    case showEmojiPicker
 
     // Row visibility
     case toggleUtilityRow

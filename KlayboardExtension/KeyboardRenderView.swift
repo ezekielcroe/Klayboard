@@ -1,6 +1,17 @@
 // KeyboardRenderView.swift
 // Programmatic, frame-based keyboard renderer with gesture support.
 //
+// CHANGES IN THIS REVISION:
+// 1. Non-character keys are scored by distance to the key's RECTANGLE EDGE,
+//    not its center. A tap anywhere inside a wide key (spacebar) now scores 0
+//    and can never fall below the global rejection threshold. The old
+//    center-distance formula rejected taps at the far ends of the spacebar.
+//    The unreachable nearest-centroid fallback was removed with it.
+// 2. TouchModel calibration is loaded from App Group storage at init.
+// 3. Long-press on a letter with accent variants opens a slide-to-select
+//    variant picker (system-keyboard style). Swipe-down still fires the
+//    altAction symbol, so symbol access is unchanged. Long-press on keys
+//    WITHOUT variants (utility keys, digits) keeps the old altAction behavior.
 
 import UIKit
 
@@ -31,6 +42,9 @@ final class KeyboardRenderView: UIView {
     // ── Touch tracking ───────────────────────
     private var activeKeyByTouch: [UITouch: KeyView] = [:]
     private var longPressTimers: [UITouch: Timer] = [:]
+
+    // ── Variant picker tracking ──────────────
+    private var pickerByTouch: [UITouch: VariantPickerView] = [:]
 
     // ── Gesture tracking ─────────────────────
     private var startTouchLocations: [UITouch: CGPoint] = [:]
@@ -97,6 +111,7 @@ final class KeyboardRenderView: UIView {
         super.init(frame: frame)
         isMultipleTouchEnabled = true
         backgroundColor = UIColor(named: "KeyboardBackground") ?? UIColor.systemGray6
+        touchModel.loadCalibration()
     }
 
     required init?(coder: NSCoder) { fatalError("Programmatic only") }
@@ -119,6 +134,7 @@ final class KeyboardRenderView: UIView {
         activeKeyByTouch.removeAll()
         startTouchLocations.removeAll()
         swipeConsumedTouches.removeAll()
+        dismissAllPickers()
 
         keyViews.forEach { $0.removeFromSuperview() }
         keyViews.removeAll()
@@ -178,16 +194,23 @@ final class KeyboardRenderView: UIView {
                 showPopup(for: kv)
             }
 
-            // Start long-press timer
-            if kv.definition.altAction != nil {
+            // Determine whether this key can respond to a long press:
+            // accent variants take precedence; altAction is the fallback.
+            let variants = Self.variantSet(for: kv.definition)
+
+            if variants != nil || kv.definition.altAction != nil {
                 let timer = Timer.scheduledTimer(withTimeInterval: longPressDuration, repeats: false) { [weak self] _ in
                     guard let self = self else { return }
                     // Only fire if the touch hasn't been consumed by a swipe
-                    if !self.swipeConsumedTouches.contains(touch), let alt = kv.definition.altAction {
-                        self.longPressActionHandler?(alt)
-                        kv.flashAlt()
-                        self.swipeConsumedTouches.insert(touch)
-                        self.hidePopup()
+                    if !self.swipeConsumedTouches.contains(touch) {
+                        if let variants = variants {
+                            self.presentVariantPicker(for: kv, variants: variants, touch: touch)
+                        } else if let alt = kv.definition.altAction {
+                            self.longPressActionHandler?(alt)
+                            kv.flashAlt()
+                            self.swipeConsumedTouches.insert(touch)
+                            self.hidePopup()
+                        }
                     }
                     self.longPressTimers.removeValue(forKey: touch)
                 }
@@ -201,6 +224,12 @@ final class KeyboardRenderView: UIView {
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
             let currentLoc = touch.location(in: self)
+
+            // 0. A touch that owns a variant picker only drives the picker.
+            if let picker = pickerByTouch[touch] {
+                picker.updateSelection(forTouchAt: currentLoc)
+                continue
+            }
 
             // 1. Process Gestures first
             if !swipeConsumedTouches.contains(touch),
@@ -266,6 +295,20 @@ final class KeyboardRenderView: UIView {
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
+
+            // Variant picker commit path
+            if let picker = pickerByTouch[touch] {
+                let selected = picker.selectedVariant
+                actionHandler?(.character(selected))
+                dismissPicker(for: touch)
+                activeKeyByTouch[touch]?.setHighlighted(false)
+                if activeKeyByTouch[touch]?.definition.action == .backspace { deleteEndedHandler?() }
+                activeKeyByTouch.removeValue(forKey: touch)
+                startTouchLocations.removeValue(forKey: touch)
+                swipeConsumedTouches.remove(touch)
+                continue
+            }
+
             if let kv = activeKeyByTouch[touch] {
                 kv.setHighlighted(false)
                 hidePopup()
@@ -299,6 +342,8 @@ final class KeyboardRenderView: UIView {
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
+            dismissPicker(for: touch)
+
             let kv = activeKeyByTouch[touch]
             kv?.setHighlighted(false)
             cancelLongPress(for: touch)
@@ -336,9 +381,10 @@ final class KeyboardRenderView: UIView {
     ///   - Containment bonus if the touch is inside the key's rectangle
     ///   - Bigram weight from the previously typed character
     ///
-    /// Non-character keys (modifier/spacebar/utility) are scored by strict
-    /// rectangular containment with NO expansion, preventing shift/backspace
-    /// from stealing boundary touches from adjacent character keys.
+    /// Non-character keys (modifier/spacebar/utility) are scored by distance
+    /// to the key's RECTANGLE EDGE. Any touch inside the frame scores 0, so
+    /// key width has no effect on hit reliability and wide keys (spacebar)
+    /// never lose their own touches to the rejection threshold.
     ///
     /// If `currentKey` is provided (during touchesMoved), that key receives
     /// a hysteresis bonus so the finger must move significantly to switch.
@@ -375,20 +421,29 @@ final class KeyboardRenderView: UIView {
                 }
 
             } else {
-                // ── NON-CHARACTER KEY: Padded Hit Box ──
-                
-                let hitRect = kv.frame.insetBy(dx: -8, dy: -12) // Expand hit area safely
-                
-                if hitRect.contains(pt) {
-                    let dx = pt.x - center.x
-                    let dy = pt.y - center.y
-                    // Inside padded area: treat as a strong hit
-                    score = -(dx * dx + dy * dy) * 0.001
+                // ── NON-CHARACTER KEY: distance to rectangle edge ──
+                //
+                // Clamp the point to the key's frame; the distance from the
+                // touch to the clamped point is the distance to the nearest
+                // edge (0 anywhere inside). Score is independent of key
+                // width, which is what broke the old center-distance formula
+                // on the spacebar.
+
+                let clampedX = min(max(pt.x, kv.frame.minX), kv.frame.maxX)
+                let clampedY = min(max(pt.y, kv.frame.minY), kv.frame.maxY)
+                let dx = pt.x - clampedX
+                let dy = pt.y - clampedY
+                let edgeDistSq = dx * dx + dy * dy
+
+                let paddedRect = kv.frame.insetBy(dx: -8, dy: -12)
+                if paddedRect.contains(pt) {
+                    // Inside frame: edgeDistSq == 0 → score 0 (strong hit).
+                    // Inside padded band: small negative, still comfortably
+                    // above the rejection threshold.
+                    score = -edgeDistSq * 0.001
                 } else {
-                    // Outside padded area: decay smoothly instead of instantly dying
-                    let dx = pt.x - center.x
-                    let dy = pt.y - center.y
-                    score = -(dx * dx + dy * dy) * 0.005 - 10.0
+                    // Outside padded area: decay smoothly.
+                    score = -edgeDistSq * 0.005 - 2.0
                 }
             }
 
@@ -404,26 +459,10 @@ final class KeyboardRenderView: UIView {
             }
         }
 
-        // Reject touches too far from any key
+        // Reject touches too far from any key. Contained touches always pass:
+        // character keys inside their own frame carry the containment bonus,
+        // and non-character keys inside their frame score exactly 0.
         guard bestScore > -8.0 else { return nil }
-
-        // Nearest-centroid fallback
-        if bestKey == nil {
-            var fallbackKey: KeyView?
-            var fallbackDist: CGFloat = .greatestFiniteMagnitude
-            for kv in keyViews {
-                let center = CGPoint(x: kv.frame.midX, y: kv.frame.midY)
-                let dist = (pt.x - center.x) * (pt.x - center.x)
-                         + (pt.y - center.y) * (pt.y - center.y)
-                if dist < fallbackDist {
-                    fallbackDist = dist
-                    fallbackKey = kv
-                }
-            }
-            if fallbackDist < 40.0 * 40.0 {
-                return fallbackKey
-            }
-        }
 
         return bestKey
     }
@@ -433,6 +472,44 @@ final class KeyboardRenderView: UIView {
     private func cancelLongPress(for touch: UITouch) {
         longPressTimers[touch]?.invalidate()
         longPressTimers.removeValue(forKey: touch)
+    }
+
+    // ── Variant picker ───────────────────────
+
+    /// Returns the accent variant set for a key, or nil.
+    /// Only plain character keys participate; utility/modifier keys and
+    /// non-letter characters fall back to altAction long-press.
+    private static func variantSet(for definition: KeyDefinition) -> [String]? {
+        guard definition.style == .standard,
+              case .character(let c) = definition.action else { return nil }
+        return AccentVariants.variants(for: c)
+    }
+
+    private func presentVariantPicker(for keyView: KeyView, variants: [String], touch: UITouch) {
+        hidePopup()
+
+        let display: [String]
+        switch shiftState {
+        case .off:
+            display = variants
+        case .shifted, .capsLock:
+            display = variants.map { AccentVariants.shiftedDisplay($0) }
+        }
+
+        let picker = VariantPickerView(keyView: keyView, variants: display, containerBounds: bounds)
+        addSubview(picker)
+        pickerByTouch[touch] = picker
+        picker.updateSelection(forTouchAt: touch.location(in: self))
+    }
+
+    private func dismissPicker(for touch: UITouch) {
+        pickerByTouch[touch]?.removeFromSuperview()
+        pickerByTouch.removeValue(forKey: touch)
+    }
+
+    private func dismissAllPickers() {
+        for (_, picker) in pickerByTouch { picker.removeFromSuperview() }
+        pickerByTouch.removeAll()
     }
 
     // ── Popup ────────────────────────────────
@@ -447,6 +524,99 @@ final class KeyboardRenderView: UIView {
     private func hidePopup() {
         popupView?.removeFromSuperview()
         popupView = nil
+    }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// MARK: - VariantPickerView
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/// Horizontal slide-to-select accent picker shown above a key on long-press.
+/// Selection is driven purely by the touch's x-coordinate in the keyboard's
+/// coordinate space, so the finger can stay down on the key row (system
+/// keyboard behavior) rather than having to travel up into the popup.
+final class VariantPickerView: UIView {
+
+    private let variants: [String]
+    private var cells: [UILabel] = []
+    private var selectedIndex: Int = 0
+
+    private let cellWidth: CGFloat
+    private let cellHeight: CGFloat = 42
+    private let inset: CGFloat = 4
+
+    var selectedVariant: String { variants[selectedIndex] }
+
+    init(keyView: KeyView, variants: [String], containerBounds: CGRect) {
+        self.variants = variants
+
+        // Preferred cell width is 34pt; shrink uniformly if the full set
+        // would overflow the keyboard width (floor 24pt keeps cells tappable).
+        let preferred: CGFloat = 34
+        let available = containerBounds.width - 8 - 8 // side margins + insets
+        let fitted = available / CGFloat(max(variants.count, 1))
+        self.cellWidth = max(24, min(preferred, fitted))
+
+        let width = cellWidth * CGFloat(variants.count) + inset * 2
+        let height = cellHeight + inset * 2
+
+        var originX = keyView.frame.midX - width / 2
+        originX = max(4, min(originX, containerBounds.width - width - 4))
+        let originY = max(keyView.frame.minY - height - 6, 0)
+
+        super.init(frame: CGRect(x: originX, y: originY, width: width, height: height))
+
+        backgroundColor = UIColor.systemBackground
+        layer.cornerRadius = 10
+        layer.shadowColor = UIColor.black.cgColor
+        layer.shadowOpacity = 0.25
+        layer.shadowRadius = 5
+        layer.shadowOffset = CGSize(width: 0, height: 2)
+
+        for (i, v) in variants.enumerated() {
+            let lbl = UILabel(frame: CGRect(
+                x: inset + CGFloat(i) * cellWidth,
+                y: inset,
+                width: cellWidth,
+                height: cellHeight
+            ))
+            lbl.text = v
+            lbl.textAlignment = .center
+            lbl.font = UIFont.systemFont(ofSize: 22, weight: .regular)
+            lbl.layer.cornerRadius = 6
+            lbl.layer.masksToBounds = true
+            addSubview(lbl)
+            cells.append(lbl)
+        }
+
+        select(0)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    /// `pt` is in the SUPERVIEW's (keyboard's) coordinate space.
+    /// Only the x-coordinate matters; the finger may remain on the key row.
+    func updateSelection(forTouchAt pt: CGPoint) {
+        let localX = pt.x - frame.minX - inset
+        let idx = Int(floor(localX / cellWidth))
+        select(max(0, min(variants.count - 1, idx)))
+    }
+
+    private func select(_ index: Int) {
+        selectedIndex = index
+        styleCells()
+    }
+
+    private func styleCells() {
+        for (i, cell) in cells.enumerated() {
+            if i == selectedIndex {
+                cell.backgroundColor = UIColor.systemBlue
+                cell.textColor = .white
+            } else {
+                cell.backgroundColor = .clear
+                cell.textColor = .label
+            }
+        }
     }
 }
 

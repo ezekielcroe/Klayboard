@@ -12,14 +12,18 @@
 // with the keyboard. Horizontal spread (σx) is unaffected because key WIDTH
 // is determined by screen width and doesn't change with scale.
 //
+// CALIBRATION PERSISTENCE: The learned offset survives extension termination.
+// It is saved to App Group UserDefaults every `saveInterval` samples and
+// loaded once when the render view is created. The EMA converges over ~100
+// samples; without persistence the extension is usually killed first.
+//
 
 import CoreGraphics
+import Foundation
 
 struct TouchModel {
 
     // ── Gaussian Base Parameters ────────────────────
-    // These define the probability cloud at scale = 1.0.
-    // At other scales, σy is adjusted dynamically (see logProbability).
 
     /// Base horizontal spread (σx). Thumbs are wider than they are tall,
     /// so horizontal error tolerance is larger. This does NOT scale with
@@ -33,38 +37,39 @@ struct TouchModel {
 
     /// Base vertical bias at scale 1.0: users consistently hit slightly below
     /// key center because the thumb approaches from the bottom of the screen.
-    /// Scaled proportionally with keyboard height so the bias doesn't
-    /// overshoot on compact layouts.
     var baseYBias: CGFloat = 2.0
 
     /// Per-user calibration offset, learned from typing history.
     /// Applied to every touch point before scoring.
     var calibrationOffset: CGPoint = .zero
 
+    // ── Persistence ─────────────────────────────────
+
+    private static let calibrationXKey = "touchCalibrationOffsetX"
+    private static let calibrationYKey = "touchCalibrationOffsetY"
+
+    /// Save to App Group UserDefaults every N samples. Keeps write volume low
+    /// while guaranteeing at most N samples of learning are lost on jetsam.
+    private static let saveInterval = 15
+    private var samplesSinceSave = 0
+
+    /// Hard cap on offset magnitude. Calibration corrects grip bias, which is
+    /// a few points; anything larger is drift or corrupted state and would
+    /// misdirect every touch on the keyboard.
+    private static let maxOffsetMagnitude: CGFloat = 8.0
+
     // ── Scoring ─────────────────────────────────────
 
     /// Returns the log-probability that a touch at `touchPoint` was aimed at `keyCenter`.
-    ///
-    /// - Parameter scale: The current keyboard height scale factor (0.75 … 1.4).
-    ///   At 1.0, base sigma values are used directly. At lower scales, σy widens
-    ///   inversely to compensate for compressed row height. At higher scales, σy
-    ///   tightens slightly for more precision on oversized keys.
-    ///
-    /// Uses log-probability instead of raw probability because:
-    /// 1. It avoids floating-point underflow for distant keys
-    /// 2. Comparison uses simple > instead of multiplying tiny numbers
-    /// 3. The normalization constant cancels out (same for all keys), so we skip it
-    ///
     /// Higher (closer to 0) = more likely. All values are ≤ 0.
     func logProbability(touchPoint: CGPoint, keyCenter: CGPoint, scale: CGFloat = 1.0) -> CGFloat {
         let adjustedX = touchPoint.x - calibrationOffset.x
         let adjustedY = touchPoint.y - calibrationOffset.y
 
-        // Scale-adjusted parameters:
         // σx stays constant (key width doesn't change with scale)
         // σy widens as keys get shorter (divide by scale)
         // yBias shrinks proportionally (multiply by scale)
-        let clampedScale = max(scale, 0.5)  // safety floor to avoid division issues
+        let clampedScale = max(scale, 0.5)
         let sx = baseSigmaX
         let sy = baseSigmaY / clampedScale
         let yb = baseYBias * clampedScale
@@ -72,7 +77,6 @@ struct TouchModel {
         let dx = adjustedX - keyCenter.x
         let dy = adjustedY - (keyCenter.y + yb)
 
-        // Standard Gaussian exponent: -0.5 * ((dx/σx)² + (dy/σy)²)
         let exponent = -0.5 * ((dx * dx) / (sx * sx)
                               + (dy * dy) / (sy * sy))
         return exponent
@@ -85,22 +89,51 @@ struct TouchModel {
 
     /// Updates the calibration offset based on a confirmed keystroke.
     /// Call this after a character key is tapped (not for modifiers/spacebar/delete).
-    ///
-    /// `touchPoint`: where the finger actually landed
-    /// `keyCenter`:  the center of the key that was selected
     mutating func recordCalibrationSample(touchPoint: CGPoint, keyCenter: CGPoint) {
         let dx = touchPoint.x - keyCenter.x
         let dy = touchPoint.y - keyCenter.y
 
-        // Exponential moving average — converges quickly, adapts to grip changes
+        var newX = calibrationOffset.x + Self.emaAlpha * (dx - calibrationOffset.x)
+        var newY = calibrationOffset.y + Self.emaAlpha * (dy - calibrationOffset.y)
+
+        newX = min(max(newX, -Self.maxOffsetMagnitude), Self.maxOffsetMagnitude)
+        newY = min(max(newY, -Self.maxOffsetMagnitude), Self.maxOffsetMagnitude)
+        calibrationOffset = CGPoint(x: newX, y: newY)
+
+        samplesSinceSave += 1
+        if samplesSinceSave >= Self.saveInterval {
+            samplesSinceSave = 0
+            saveCalibration()
+        }
+    }
+
+    // ── Load / Save / Reset ─────────────────────────
+
+    /// Loads the persisted offset. Call once when the render view is created.
+    mutating func loadCalibration() {
+        guard let defaults = UserDefaults(suiteName: AppConstants.appGroupID),
+              let x = defaults.object(forKey: Self.calibrationXKey) as? Double,
+              let y = defaults.object(forKey: Self.calibrationYKey) as? Double else { return }
         calibrationOffset = CGPoint(
-            x: calibrationOffset.x + Self.emaAlpha * (dx - calibrationOffset.x),
-            y: calibrationOffset.y + Self.emaAlpha * (dy - calibrationOffset.y)
+            x: min(max(CGFloat(x), -Self.maxOffsetMagnitude), Self.maxOffsetMagnitude),
+            y: min(max(CGFloat(y), -Self.maxOffsetMagnitude), Self.maxOffsetMagnitude)
         )
     }
 
-    /// Resets calibration to zero. Called from Settings → "Reset Typing Calibration".
+    func saveCalibration() {
+        guard let defaults = UserDefaults(suiteName: AppConstants.appGroupID) else { return }
+        defaults.set(Double(calibrationOffset.x), forKey: Self.calibrationXKey)
+        defaults.set(Double(calibrationOffset.y), forKey: Self.calibrationYKey)
+    }
+
+    /// Resets calibration to zero and clears persisted state.
+    /// The Settings app can achieve the same by removing both keys from the
+    /// App Group suite; the extension picks that up on its next cold launch.
     mutating func resetCalibration() {
         calibrationOffset = .zero
+        samplesSinceSave = 0
+        guard let defaults = UserDefaults(suiteName: AppConstants.appGroupID) else { return }
+        defaults.removeObject(forKey: Self.calibrationXKey)
+        defaults.removeObject(forKey: Self.calibrationYKey)
     }
 }
