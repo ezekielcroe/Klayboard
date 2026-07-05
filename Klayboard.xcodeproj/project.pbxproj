@@ -271,7 +271,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Klayboard/Klayboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 9Y77PNP57U;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Klayboard/ContainerApp-Info.plist";
@@ -314,7 +314,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Klayboard/Klayboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 9Y77PNP57U;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Klayboard/ContainerApp-Info.plist";
@@ -477,7 +477,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = KlayboardExtension/KlayboardExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 9Y77PNP57U;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "KlayboardExtension/KeyboardExtension-Info.plist";
@@ -514,7 +514,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = KlayboardExtension/KlayboardExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 9Y77PNP57U;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "KlayboardExtension/KeyboardExtension-Info.plist";

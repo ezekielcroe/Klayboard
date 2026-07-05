@@ -1,11 +1,6 @@
 // OnboardingViewController.swift
 // First-launch onboarding flow for Klay keyboard.
 //
-// 5 screens: Welcome → Install → Layout Tour → Hidden Powers → Try It
-// Uses UIPageViewController for swipe navigation with manual advance buttons.
-// Skippable at any point. Persists completion flag to App Group UserDefaults.
-//
-// Programmatic UIKit — no storyboards.
 
 import UIKit
 
@@ -203,7 +198,7 @@ private final class WelcomePage: UIViewController {
 
         // ── Logo / title ──────────────────────
         let titleLabel = UILabel()
-        titleLabel.text = "KLAY"
+        titleLabel.text = "KLAYBOARD"
         titleLabel.font = UIFont.systemFont(ofSize: 48, weight: .black)
         titleLabel.textColor = OnboardingConstants.warmAccent
         titleLabel.textAlignment = .center
@@ -216,7 +211,7 @@ private final class WelcomePage: UIViewController {
         tagline.numberOfLines = 0
 
         let philosophy = UILabel()
-        philosophy.text = "No AI. No cloud. No lag.\nJust your keys, your way."
+        philosophy.text = "No autocorrect. No cloud. Nothing rewritten.\nJust your keys, your way."
         philosophy.font = UIFont.systemFont(ofSize: 16, weight: .regular)
         philosophy.textColor = OnboardingConstants.subtleText
         philosophy.textAlignment = .center
@@ -299,13 +294,13 @@ private final class InstallPage: UIViewController {
 
         // ── Title ─────────────────────────────
         let title = UILabel()
-        title.text = "Enable Klay"
+        title.text = "Enable Klayboard"
         title.font = UIFont.systemFont(ofSize: 28, weight: .bold)
         title.textColor = .label
         title.textAlignment = .center
 
         let subtitle = UILabel()
-        subtitle.text = "Follow these steps to add Klay\nas your keyboard."
+        subtitle.text = "Follow these steps to add Klayboard\nas your keyboard."
         subtitle.font = UIFont.systemFont(ofSize: 16, weight: .regular)
         subtitle.textColor = OnboardingConstants.subtleText
         subtitle.textAlignment = .center
@@ -389,7 +384,7 @@ private final class InstallPage: UIViewController {
             ("2", "General → Keyboard"),
             ("3", "Keyboards → Add New Keyboard…"),
             ("4", "Select \"Klayboard\""),
-            ("5", "Tap Klayboard → Allow Full Access")
+            ("5", "(Optional) Tap Klayboard → Allow Full Access")
         ]
 
         let stack = UIStackView()
@@ -401,6 +396,16 @@ private final class InstallPage: UIViewController {
             let row = makeStepRow(number: num, text: text)
             stack.addArrangedSubview(row)
         }
+
+        // Full Access scope note. Without the grant the extension loses the
+        // App Group, so the container app's settings can't reach it either.
+        let fullAccessNote = UILabel()
+        fullAccessNote.text = "Full Access is optional — Klayboard types without it. Granting it unlocks clipboard history, copy/paste keys, haptics, and your settings from this app (layouts, macros, per-key changes). Klayboard has no network code; nothing you type leaves this device."
+        fullAccessNote.font = UIFont.systemFont(ofSize: 12, weight: .regular)
+        fullAccessNote.textColor = OnboardingConstants.subtleText
+        fullAccessNote.numberOfLines = 0
+        stack.addArrangedSubview(fullAccessNote)
+        stack.setCustomSpacing(16, after: stack.arrangedSubviews[steps.count - 1])
 
         card.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -430,6 +435,8 @@ private final class InstallPage: UIViewController {
         label.text = text
         label.font = UIFont.systemFont(ofSize: 16, weight: .regular)
         label.textColor = .label
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.8
         label.translatesAutoresizingMaskIntoConstraints = false
 
         container.addSubview(badge)
@@ -458,13 +465,16 @@ private final class InstallPage: UIViewController {
 
     private func updateStatus() {
         if isKeyboardActivated() {
-            // Best case: the extension has actually loaded
-            statusLabel.text = "✓ Klay is enabled and ready"
+            // Best case: the extension has actually loaded. Note: this flag
+            // is written through the App Group, so it only ever fires for
+            // users who granted Full Access. Users who declined land on the
+            // hasVisitedSettings branch below — expected, not a bug.
+            statusLabel.text = "✓ Klayboard is enabled and ready"
             statusLabel.textColor = UIColor.systemGreen
             continueButton.configuration?.title = "Next"
         } else if hasVisitedSettings {
             // User went to Settings and came back
-            statusLabel.text = "Done adding Klay? Tap Continue.\nYou'll be able to try it on the next screen."
+            statusLabel.text = "Done adding Klayboard? Tap Continue.\nYou'll be able to try it on the next screen."
             statusLabel.textColor = OnboardingConstants.subtleText
             continueButton.configuration?.title = "Continue"
         } else {
@@ -514,7 +524,7 @@ private final class LayoutTourPage: UIViewController {
         ("Top Alpha",    "Q–P with symbol alternates on every key"),
         ("Mid Alpha",    "A–L with punctuation alternates"),
         ("Bottom Alpha", "Shift, Z–M, backspace"),
-        ("Spacebar Row", "Layout switch, globe, spacebar, return")
+        ("Spacebar Row", "Layout switch, globe, emoji, spacebar, return")
     ]
 
     override func viewDidLoad() {
@@ -539,7 +549,7 @@ private final class LayoutTourPage: UIViewController {
             ("q  w  e  r  t  y  u  i  o  p", UIColor.secondarySystemGroupedBackground),
             ("a  s  d  f  g  h  j  k  l", UIColor.secondarySystemGroupedBackground),
             ("⇧  z  x  c  v  b  n  m  ⌫", UIColor.secondarySystemGroupedBackground),
-            ("123   🌐   ⎵ space ⎵   ⏎", UIColor.systemGray4)
+            ("123   🌐   😊   ⎵ space ⎵   ⏎", UIColor.systemGray4)
         ]
 
         let rowStack = UIStackView()
@@ -716,12 +726,27 @@ private final class HiddenPowersPage: UIViewController {
             makeFeatureCard(
                 icon: "hand.draw",
                 title: "Swipe Down for Symbols",
-                body: "Every letter and number key has a secondary character. Swipe down or long-press to type it instantly.\n\nq → +    w → =    1 → !    2 → @"
+                body: "Every letter and number key has a secondary character. Swipe down to type it instantly.\n\nq → +    w → =    1 → !    2 → @"
+            ),
+            makeFeatureCard(
+                icon: "character.magnify",
+                title: "Hold for Accents & More",
+                body: "Hold any letter to open a picker with accents and special characters — slide to choose, release to type.\n\ne → é è ê    p → π    v → √    g → ©"
+            ),
+            makeFeatureCard(
+                icon: "cursorarrow.motionlines",
+                title: "Spacebar Trackpad",
+                body: "Hold the spacebar, then slide — the cursor follows your finger. Release to drop it exactly where you need it."
+            ),
+            makeFeatureCard(
+                icon: "face.smiling",
+                title: "Emoji, One Tap Away",
+                body: "Tap the emoji key next to the spacebar for a full picker with categories and your recents. No keyboard switching."
             ),
             makeFeatureCard(
                 icon: "space",
                 title: "Double-Space → Period",
-                body: "Tap space twice quickly after a word and Klay inserts a period + space, then auto-shifts for the next sentence."
+                body: "Tap space twice quickly after a word and Klayboard inserts a period + space, then auto-shifts for the next sentence."
             ),
             makeFeatureCard(
                 icon: "text.alignleft",
@@ -731,7 +756,7 @@ private final class HiddenPowersPage: UIViewController {
             makeFeatureCard(
                 icon: "doc.on.clipboard",
                 title: "Local Clipboard History",
-                body: "Swipe down on the Paste icon to reveal a private, scrollable history of your recent copies right inside the keyboard."
+                body: "Swipe down on the Paste icon to reveal a scrollable history of your recent copies right inside the keyboard.\n\niOS may show a paste notice the first time — that's the system confirming Klayboard only reads your clipboard when you open this panel."
             )
         ]
 
@@ -831,24 +856,33 @@ private final class HiddenPowersPage: UIViewController {
 private final class TryItPage: UIViewController {
 
     weak var delegate: OnboardingPageDelegate?
-    
+
     private let scrollView = UIScrollView()
     private let contentView = UIView()
     private let textView = UITextView()
     private var challengeLabels: [UILabel] = []
     private let doneButton = makePrimaryButton(title: "I'm Ready")
-    
+
     private var doneButtonBottomConstraint: NSLayoutConstraint!
 
     // Challenges for the user to try
     private let challenges = [
         ("Type anything", "Start typing a sentence"),
         ("Swipe down on \"1\"", "You should get \"!\""),
-        ("Double-tap shift", "Locks caps — tap again to unlock"),
+        ("Hold \"e\", then slide", "Pick é from the popup"),
+        ("Tap the 😊 key", "Browse and insert an emoji"),
+        ("Hold the spacebar, then slide", "The cursor follows your finger"),
         ("Swipe up from spacebar", "Dismisses the keyboard — tap to return")
     ]
 
     private var keyboardDismissed = false
+
+    // Cursor-challenge detection: adjustTextPosition changes the selection
+    // without changing the text, so several consecutive selection changes
+    // with identical text indicate a trackpad drag rather than a tap.
+    private var lastTextSnapshot = ""
+    private var selectionMovesWithoutTextChange = 0
+    private var cursorChallengeDone = false
 
     init(delegate: OnboardingPageDelegate) {
         self.delegate = delegate
@@ -870,11 +904,11 @@ private final class TryItPage: UIViewController {
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(didTapBackground))
         tapGesture.cancelsTouchesInView = false
         view.addGestureRecognizer(tapGesture)
-        
+
         // ── Floating Action Button ────────────
         doneButton.addTarget(self, action: #selector(didTapDone), for: .touchUpInside)
         view.addSubview(doneButton)
-        
+
         doneButtonBottomConstraint = doneButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -60)
         NSLayoutConstraint.activate([
             doneButton.widthAnchor.constraint(equalToConstant: 260),
@@ -887,7 +921,7 @@ private final class TryItPage: UIViewController {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.showsVerticalScrollIndicator = false
         view.addSubview(scrollView)
-        
+
         contentView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(contentView)
 
@@ -900,7 +934,7 @@ private final class TryItPage: UIViewController {
         title.translatesAutoresizingMaskIntoConstraints = false
 
         let subtitle = UILabel()
-        subtitle.text = "Switch to Klay using the 🌐 key\nif it's not already active."
+        subtitle.text = "Switch to Klayboard using the 🌐 key\nif it's not already active."
         subtitle.font = UIFont.systemFont(ofSize: 15, weight: .regular)
         subtitle.textColor = OnboardingConstants.subtleText
         subtitle.textAlignment = .center
@@ -959,7 +993,7 @@ private final class TryItPage: UIViewController {
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: doneButton.topAnchor, constant: -16),
-            
+
             // Content View bounds
             contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
             contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
@@ -996,7 +1030,7 @@ private final class TryItPage: UIViewController {
         // Auto-focus the text view so the keyboard appears
         textView.becomeFirstResponder()
     }
-    
+
     // ── Keyboard Avoidance ────────────────────
 
     private func setupKeyboardObservers() {
@@ -1008,24 +1042,24 @@ private final class TryItPage: UIViewController {
     @objc private func keyboardWillShow(notification: NSNotification) {
         guard let userInfo = notification.userInfo,
               let kbFrame = userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-        
+
         let duration = userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.3
         let curveValue = userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int ?? UIView.AnimationCurve.easeOut.rawValue
-        
+
         // Calculate how much to shift the button up.
         // It should float just above the keyboard frame.
         let safeAreaBottom = view.safeAreaInsets.bottom
         let keyboardHeight = kbFrame.height
-        
+
         // Push button exactly to the top of the keyboard + padding
         let newConstant = -(keyboardHeight - safeAreaBottom + 16)
-        
+
         doneButtonBottomConstraint.constant = newConstant
-        
+
         UIView.animate(withDuration: duration, delay: 0, options: UIView.AnimationOptions(rawValue: UInt(curveValue << 16))) {
             self.view.layoutIfNeeded()
         }
-        
+
         // Scroll slightly so challenges are visible if hidden
         let bottomOffset = CGPoint(x: 0, y: max(0, scrollView.contentSize.height - scrollView.bounds.height))
         scrollView.setContentOffset(bottomOffset, animated: true)
@@ -1033,10 +1067,10 @@ private final class TryItPage: UIViewController {
 
     @objc private func keyboardWillHide(notification: NSNotification) {
         let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.3
-        
+
         // Restore standard bottom margin
         doneButtonBottomConstraint.constant = -60
-        
+
         UIView.animate(withDuration: duration) {
             self.view.layoutIfNeeded()
         }
@@ -1102,17 +1136,26 @@ private final class TryItPage: UIViewController {
             challengeLabels[1].text = "●"
         }
 
-        // Challenge 3: contains at least 2 consecutive uppercase letters (caps lock evidence)
-        if challengeLabels.count > 2 {
-            let uppercasePattern = text.range(of: "[A-Z]{2,}", options: .regularExpression)
-            if uppercasePattern != nil {
-                challengeLabels[2].text = "●"
-            }
+        // Challenge 3: contains an accented e (any case)
+        if challengeLabels.count > 2,
+           text.range(of: "[éèêëēėęÉÈÊËĒĖĘ]", options: .regularExpression) != nil {
+            challengeLabels[2].text = "●"
         }
 
-        // Challenge 4: keyboard was dismissed via swipe-up
-        if keyboardDismissed && challengeLabels.count > 3 {
+        // Challenge 4: contains an emoji
+        if challengeLabels.count > 3,
+           text.unicodeScalars.contains(where: { $0.properties.isEmojiPresentation || ($0.properties.isEmoji && $0.value >= 0x1F300) }) {
             challengeLabels[3].text = "●"
+        }
+
+        // Challenge 5: cursor trackpad (set by selection tracking)
+        if cursorChallengeDone && challengeLabels.count > 4 {
+            challengeLabels[4].text = "●"
+        }
+
+        // Challenge 6: keyboard was dismissed via swipe-up
+        if keyboardDismissed && challengeLabels.count > 5 {
+            challengeLabels[5].text = "●"
         }
     }
 
@@ -1140,7 +1183,29 @@ extension TryItPage: UITextViewDelegate {
         if let placeholder = textView.viewWithTag(999) {
             placeholder.isHidden = !textView.text.isEmpty
         }
+        // Text mutated: reset the trackpad-detection counter.
+        lastTextSnapshot = textView.text ?? ""
+        selectionMovesWithoutTextChange = 0
         checkChallenges()
+    }
+
+    func textViewDidChangeSelection(_ textView: UITextView) {
+        guard !cursorChallengeDone else { return }
+        let text = textView.text ?? ""
+        guard !text.isEmpty else { return }
+
+        // A trackpad drag produces a run of selection changes with the text
+        // untouched; a single tap produces one. Four in a row is a drag.
+        if text == lastTextSnapshot {
+            selectionMovesWithoutTextChange += 1
+            if selectionMovesWithoutTextChange >= 4 {
+                cursorChallengeDone = true
+                checkChallenges()
+            }
+        } else {
+            lastTextSnapshot = text
+            selectionMovesWithoutTextChange = 0
+        }
     }
 }
 
@@ -1157,10 +1222,10 @@ private func makePrimaryButton(title: String) -> UIButton {
     config.baseBackgroundColor = OnboardingConstants.warmAccent
     config.baseForegroundColor = .white
     config.cornerStyle = .medium
-    
+
     let font = UIFont.systemFont(ofSize: 17, weight: .semibold)
     config.attributedTitle = AttributedString(title, attributes: AttributeContainer([.font: font]))
-    
+
     let button = UIButton(configuration: config)
     button.translatesAutoresizingMaskIntoConstraints = false
     return button

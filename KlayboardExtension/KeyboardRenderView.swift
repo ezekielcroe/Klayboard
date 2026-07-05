@@ -1,17 +1,6 @@
 // KeyboardRenderView.swift
 // Programmatic, frame-based keyboard renderer with gesture support.
 //
-// CHANGES IN THIS REVISION:
-// 1. Non-character keys are scored by distance to the key's RECTANGLE EDGE,
-//    not its center. A tap anywhere inside a wide key (spacebar) now scores 0
-//    and can never fall below the global rejection threshold. The old
-//    center-distance formula rejected taps at the far ends of the spacebar.
-//    The unreachable nearest-centroid fallback was removed with it.
-// 2. TouchModel calibration is loaded from App Group storage at init.
-// 3. Long-press on a letter with accent variants opens a slide-to-select
-//    variant picker (system-keyboard style). Swipe-down still fires the
-//    altAction symbol, so symbol access is unchanged. Long-press on keys
-//    WITHOUT variants (utility keys, digits) keeps the old altAction behavior.
 
 import UIKit
 
@@ -22,6 +11,9 @@ final class KeyboardRenderView: UIView {
     var longPressActionHandler: ((KeyAction) -> Void)?
     var deleteBeganHandler: (() -> Void)?
     var deleteEndedHandler: (() -> Void)?
+    var cursorModeBeganHandler: (() -> Void)?
+    var cursorModeMovedHandler: ((Int) -> Void)?
+    var cursorModeEndedHandler: (() -> Void)?
 
     // ── Layout data ──────────────────────────
     private var rows: [LayoutRow] = []
@@ -29,6 +21,21 @@ final class KeyboardRenderView: UIView {
     private var shiftState: ShiftState = .off
     private var showPopups: Bool = true
     var longPressDuration: TimeInterval = 0.2
+
+    /// Spacebar trackpad activation delay. Deliberately NOT tied to
+    /// longPressDuration: users tune that down to 0.15s for the variant
+    /// picker, and at that threshold slow space taps would trip cursor
+    /// mode constantly. The system keyboard uses ~0.5s.
+    private let spacebarCursorDelay: TimeInterval = 0.45
+
+    /// Horizontal points of finger travel per one character of cursor
+    /// movement in trackpad mode.
+    private let pointsPerCursorStep: CGFloat = 7.5
+
+    // ── Cursor (trackpad) mode tracking ───────
+    private var cursorModeTouches: Set<UITouch> = []
+    private var cursorModeLastX: [UITouch: CGFloat] = [:]
+    private var cursorModeAccumulator: [UITouch: CGFloat] = [:]
 
     private let interRowSpacing: CGFloat = 6.0
     private let interKeySpacing: CGFloat = 4.0
@@ -135,6 +142,9 @@ final class KeyboardRenderView: UIView {
         startTouchLocations.removeAll()
         swipeConsumedTouches.removeAll()
         dismissAllPickers()
+        cursorModeTouches.removeAll()
+        cursorModeLastX.removeAll()
+        cursorModeAccumulator.removeAll()
 
         keyViews.forEach { $0.removeFromSuperview() }
         keyViews.removeAll()
@@ -194,28 +204,9 @@ final class KeyboardRenderView: UIView {
                 showPopup(for: kv)
             }
 
-            // Determine whether this key can respond to a long press:
-            // accent variants take precedence; altAction is the fallback.
-            let variants = Self.variantSet(for: kv.definition)
-
-            if variants != nil || kv.definition.altAction != nil {
-                let timer = Timer.scheduledTimer(withTimeInterval: longPressDuration, repeats: false) { [weak self] _ in
-                    guard let self = self else { return }
-                    // Only fire if the touch hasn't been consumed by a swipe
-                    if !self.swipeConsumedTouches.contains(touch) {
-                        if let variants = variants {
-                            self.presentVariantPicker(for: kv, variants: variants, touch: touch)
-                        } else if let alt = kv.definition.altAction {
-                            self.longPressActionHandler?(alt)
-                            kv.flashAlt()
-                            self.swipeConsumedTouches.insert(touch)
-                            self.hidePopup()
-                        }
-                    }
-                    self.longPressTimers.removeValue(forKey: touch)
-                }
-                longPressTimers[touch] = timer
-            }
+            // Long-press timer: accent variants take precedence; altAction
+            // is the fallback.
+            scheduleLongPress(for: kv, touch: touch)
 
             if kv.definition.action == .backspace { deleteBeganHandler?() }
         }
@@ -228,6 +219,12 @@ final class KeyboardRenderView: UIView {
             // 0. A touch that owns a variant picker only drives the picker.
             if let picker = pickerByTouch[touch] {
                 picker.updateSelection(forTouchAt: currentLoc)
+                continue
+            }
+
+            // 0b. A touch in cursor (trackpad) mode only moves the cursor.
+            if cursorModeTouches.contains(touch) {
+                handleCursorModeMove(touch: touch, currentX: currentLoc.x)
                 continue
             }
 
@@ -266,7 +263,22 @@ final class KeyboardRenderView: UIView {
             // 2. If not swiped, process normal sliding between keys.
             //    Uses hysteresis: the currently active key gets a bonus so
             //    micro-drift during a press doesn't flip to a neighbor.
+            //
+            //    VERTICAL-DOMINANT MOVEMENT IS RESERVED FOR SWIPES. A swipe
+            //    down that drifted onto a neighboring key used to re-target
+            //    mid-gesture: the slide switched the active key and reset the
+            //    start location, the ±swipeThreshold was never crossed against
+            //    the new start, and touchesEnded fired the neighbor's action
+            //    (swipe down on "l" became a backspace tap). A touch moving
+            //    mostly vertically now stays on its original key until it
+            //    either crosses the threshold and fires the gesture, or ends.
             if swipeConsumedTouches.contains(touch) { continue }
+
+            if let startLoc = startTouchLocations[touch] {
+                let dxTotal = currentLoc.x - startLoc.x
+                let dyTotal = currentLoc.y - startLoc.y
+                if abs(dyTotal) > abs(dxTotal) { continue }
+            }
 
             let newKV = hitKeyViewForMove(for: touch, currentKey: activeKeyByTouch[touch])
             let oldKV = activeKeyByTouch[touch]
@@ -282,6 +294,12 @@ final class KeyboardRenderView: UIView {
                     nkv.setHighlighted(true)
                     startTouchLocations[touch] = currentLoc
 
+                    // Restart the long-press clock on the new key. Without
+                    // this, an early micro-slide canceled the timer and the
+                    // long-press never fired for the rest of the touch —
+                    // felt as an inconsistent, key-dependent delay.
+                    scheduleLongPress(for: nkv, touch: touch)
+
                     if showPopups, case .character = nkv.definition.action {
                         showPopup(for: nkv)
                     }
@@ -295,6 +313,16 @@ final class KeyboardRenderView: UIView {
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
+
+            // Cursor (trackpad) mode exit path
+            if cursorModeTouches.contains(touch) {
+                exitCursorMode(touch: touch)
+                activeKeyByTouch[touch]?.setHighlighted(false)
+                activeKeyByTouch.removeValue(forKey: touch)
+                startTouchLocations.removeValue(forKey: touch)
+                swipeConsumedTouches.remove(touch)
+                continue
+            }
 
             // Variant picker commit path
             if let picker = pickerByTouch[touch] {
@@ -343,6 +371,9 @@ final class KeyboardRenderView: UIView {
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
             dismissPicker(for: touch)
+            if cursorModeTouches.contains(touch) {
+                exitCursorMode(touch: touch)
+            }
 
             let kv = activeKeyByTouch[touch]
             kv?.setHighlighted(false)
@@ -469,9 +500,98 @@ final class KeyboardRenderView: UIView {
 
     // ── Long press ───────────────────────────
 
+    /// Starts (or restarts) the long-press timer for a key. Called from
+    /// touchesBegan and from slide re-targeting, so a touch that settles onto
+    /// a neighboring key gets a fresh, full-length long-press window there.
+    private func scheduleLongPress(for kv: KeyView, touch: UITouch) {
+        cancelLongPress(for: touch)
+
+        // Spacebar owns a different long-press: cursor (trackpad) mode,
+        // on its own fixed delay.
+        if kv.definition.action == .space {
+            let timer = Timer.scheduledTimer(withTimeInterval: spacebarCursorDelay, repeats: false) { [weak self] _ in
+                guard let self = self else { return }
+                if !self.swipeConsumedTouches.contains(touch) {
+                    self.enterCursorMode(touch: touch, spacebar: kv)
+                }
+                self.longPressTimers.removeValue(forKey: touch)
+            }
+            longPressTimers[touch] = timer
+            return
+        }
+
+        let variants = Self.variantSet(for: kv.definition)
+        guard variants != nil || kv.definition.altAction != nil else { return }
+
+        let timer = Timer.scheduledTimer(withTimeInterval: longPressDuration, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            // Only fire if the touch hasn't been consumed by a swipe
+            if !self.swipeConsumedTouches.contains(touch) {
+                if let variants = variants {
+                    self.presentVariantPicker(for: kv, variants: variants, touch: touch)
+                } else if let alt = kv.definition.altAction {
+                    self.longPressActionHandler?(alt)
+                    kv.flashAlt()
+                    self.swipeConsumedTouches.insert(touch)
+                    self.hidePopup()
+                }
+            }
+            self.longPressTimers.removeValue(forKey: touch)
+        }
+        longPressTimers[touch] = timer
+    }
+
     private func cancelLongPress(for touch: UITouch) {
         longPressTimers[touch]?.invalidate()
         longPressTimers.removeValue(forKey: touch)
+    }
+
+    // ── Cursor (trackpad) mode ────────────────
+
+    private func enterCursorMode(touch: UITouch, spacebar: KeyView) {
+        cursorModeTouches.insert(touch)
+        cursorModeLastX[touch] = touch.location(in: self).x
+        cursorModeAccumulator[touch] = 0
+
+        // Release must not insert a space, and the swipe-up dismiss must
+        // stop competing with the drag.
+        swipeConsumedTouches.insert(touch)
+
+        // Visual cue: dim everything but the spacebar.
+        UIView.animate(withDuration: 0.15) {
+            for kv in self.keyViews where kv !== spacebar {
+                kv.alpha = 0.35
+            }
+        }
+
+        cursorModeBeganHandler?()
+    }
+
+    private func handleCursorModeMove(touch: UITouch, currentX: CGFloat) {
+        guard let lastX = cursorModeLastX[touch] else { return }
+        var acc = (cursorModeAccumulator[touch] ?? 0) + (currentX - lastX)
+        cursorModeLastX[touch] = currentX
+
+        let steps = Int(acc / pointsPerCursorStep)
+        if steps != 0 {
+            acc -= CGFloat(steps) * pointsPerCursorStep
+            cursorModeMovedHandler?(steps)
+        }
+        cursorModeAccumulator[touch] = acc
+    }
+
+    private func exitCursorMode(touch: UITouch) {
+        cursorModeTouches.remove(touch)
+        cursorModeLastX.removeValue(forKey: touch)
+        cursorModeAccumulator.removeValue(forKey: touch)
+
+        if cursorModeTouches.isEmpty {
+            UIView.animate(withDuration: 0.15) {
+                for kv in self.keyViews { kv.alpha = 1.0 }
+            }
+        }
+
+        cursorModeEndedHandler?()
     }
 
     // ── Variant picker ───────────────────────
