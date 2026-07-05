@@ -44,13 +44,13 @@ final class SettingsViewController: UITableViewController {
         let headerView = UIView(frame: CGRect(x: 0, y: 0, width: view.bounds.width, height: 110))
         
         let titleLabel = UILabel()
-        titleLabel.text = "KLAY"
+        titleLabel.text = "KLAYBOARD"
         titleLabel.font = .systemFont(ofSize: 34, weight: .black)
         titleLabel.textColor = UIColor(red: 0.72, green: 0.52, blue: 0.32, alpha: 1.0) // Warm terracotta
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         
         let subtitleLabel = UILabel()
-        subtitleLabel.text = "The power-user's customizable keyboard"
+        subtitleLabel.text = "A power-user's customizable keyboard"
         subtitleLabel.font = .systemFont(ofSize: 14, weight: .medium)
         subtitleLabel.textColor = .secondaryLabel
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -120,7 +120,7 @@ final class SettingsViewController: UITableViewController {
             }
             return "Choose which symbols appear on swipe-down. Tap ⓘ to remap individual keys."
         case .data:
-            return "Klay operates entirely on-device and never requests network access."
+            return "Klayboard operates entirely on-device and never requests network access."
         default: return nil
         }
     }
@@ -393,7 +393,7 @@ final class SettingsViewController: UITableViewController {
         case .data:
             let alert = UIAlertController(
                 title: "Clear Clipboard",
-                message: "This will permanently delete your stored clipboard history from the Klay App Group.",
+                message: "This will permanently delete your stored clipboard history from the Klayboard App Group.",
                 preferredStyle: .alert
             )
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))

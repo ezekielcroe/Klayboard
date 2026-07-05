@@ -132,6 +132,17 @@ final class KeyboardViewController: UIInputViewController {
         keyboardView.deleteEndedHandler = { [weak self] in
             self?.stopDeleteRepeat()
         }
+        
+        keyboardView.cursorModeBeganHandler = { [weak self] in
+            self?.playHaptic()
+        }
+        keyboardView.cursorModeMovedHandler = { [weak self] offset in
+            self?.textDocumentProxy.adjustTextPosition(byCharacterOffset: offset)
+        }
+        keyboardView.cursorModeEndedHandler = { [weak self] in
+            self?.resetInsertTracking()
+            self?.macroEngine.resetBuffer()
+        }
         view.addSubview(keyboardView)
 
         NSLayoutConstraint.activate([
