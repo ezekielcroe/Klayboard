@@ -45,8 +45,12 @@ struct TouchModel {
 
     // ── Persistence ─────────────────────────────────
 
-    private static let calibrationXKey = "touchCalibrationOffsetX"
-    private static let calibrationYKey = "touchCalibrationOffsetY"
+    // V2 keys: the V1 offset was learned *including* the y-bias, so it
+    // double-counted it. Old values are ignored rather than migrated; the
+    // EMA re-converges within ~100 keystrokes.
+    private static let calibrationXKey = "touchCalibrationOffsetX.v2"
+    private static let calibrationYKey = "touchCalibrationOffsetY.v2"
+    private static let legacyKeys = ["touchCalibrationOffsetX", "touchCalibrationOffsetY"]
 
     /// Save to App Group UserDefaults every N samples. Keeps write volume low
     /// while guaranteeing at most N samples of learning are lost on jetsam.
@@ -62,17 +66,21 @@ struct TouchModel {
 
     /// Returns the log-probability that a touch at `touchPoint` was aimed at `keyCenter`.
     /// Higher (closer to 0) = more likely. All values are ≤ 0.
-    func logProbability(touchPoint: CGPoint, keyCenter: CGPoint, scale: CGFloat = 1.0) -> CGFloat {
+    ///
+    /// `keyWidth` widens σx for wide keys (landscape, iPad, number pads) so
+    /// the model stays proportional to the target. On portrait iPhone keys
+    /// (~35pt) the floor of `baseSigmaX` applies and behaviour is unchanged.
+    func logProbability(touchPoint: CGPoint, keyCenter: CGPoint, keyWidth: CGFloat = 0, scale: CGFloat = 1.0) -> CGFloat {
         let adjustedX = touchPoint.x - calibrationOffset.x
         let adjustedY = touchPoint.y - calibrationOffset.y
 
-        // σx stays constant (key width doesn't change with scale)
+        // σx: constant floor, grows with key width
         // σy widens as keys get shorter (divide by scale)
         // yBias shrinks proportionally (multiply by scale)
         let clampedScale = max(scale, 0.5)
-        let sx = baseSigmaX
+        let sx = max(baseSigmaX, keyWidth * Self.sigmaXPerKeyWidth)
         let sy = baseSigmaY / clampedScale
-        let yb = baseYBias * clampedScale
+        let yb = Self.yBias(baseYBias, scale: clampedScale)
 
         let dx = adjustedX - keyCenter.x
         let dy = adjustedY - (keyCenter.y + yb)
@@ -82,16 +90,28 @@ struct TouchModel {
         return exponent
     }
 
+    /// σx as a fraction of key width (9pt / ~35pt portrait key).
+    private static let sigmaXPerKeyWidth: CGFloat = 0.26
+
+    private static func yBias(_ base: CGFloat, scale: CGFloat) -> CGFloat {
+        base * max(scale, 0.5)
+    }
+
     // ── Calibration ─────────────────────────────────
 
     /// Exponential moving average weight. Higher = adapts faster but more jittery.
     private static let emaAlpha: CGFloat = 0.025
 
     /// Updates the calibration offset based on a confirmed keystroke.
-    /// Call this after a character key is tapped (not for modifiers/spacebar/delete).
-    mutating func recordCalibrationSample(touchPoint: CGPoint, keyCenter: CGPoint) {
+    /// `touchPoint` must be the TOUCH-DOWN location (the point that chose
+    /// the key), not the lift-off point.
+    ///
+    /// The offset learns the RESIDUAL after the fixed y-bias, because
+    /// `logProbability` applies both: expected = center + yBias + offset.
+    /// Learning the raw dy here (the V1 behaviour) counted the bias twice.
+    mutating func recordCalibrationSample(touchPoint: CGPoint, keyCenter: CGPoint, scale: CGFloat = 1.0) {
         let dx = touchPoint.x - keyCenter.x
-        let dy = touchPoint.y - keyCenter.y
+        let dy = touchPoint.y - keyCenter.y - Self.yBias(baseYBias, scale: scale)
 
         var newX = calibrationOffset.x + Self.emaAlpha * (dx - calibrationOffset.x)
         var newY = calibrationOffset.y + Self.emaAlpha * (dy - calibrationOffset.y)
@@ -111,8 +131,11 @@ struct TouchModel {
 
     /// Loads the persisted offset. Call once when the render view is created.
     mutating func loadCalibration() {
-        guard let defaults = UserDefaults(suiteName: AppConstants.appGroupID),
-              let x = defaults.object(forKey: Self.calibrationXKey) as? Double,
+        guard let defaults = UserDefaults(suiteName: AppConstants.appGroupID) else { return }
+        for key in Self.legacyKeys where defaults.object(forKey: key) != nil {
+            defaults.removeObject(forKey: key)
+        }
+        guard let x = defaults.object(forKey: Self.calibrationXKey) as? Double,
               let y = defaults.object(forKey: Self.calibrationYKey) as? Double else { return }
         calibrationOffset = CGPoint(
             x: min(max(CGFloat(x), -Self.maxOffsetMagnitude), Self.maxOffsetMagnitude),
@@ -135,5 +158,6 @@ struct TouchModel {
         guard let defaults = UserDefaults(suiteName: AppConstants.appGroupID) else { return }
         defaults.removeObject(forKey: Self.calibrationXKey)
         defaults.removeObject(forKey: Self.calibrationYKey)
+        Self.legacyKeys.forEach { defaults.removeObject(forKey: $0) }
     }
 }

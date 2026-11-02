@@ -56,29 +56,84 @@ final class KeyboardRenderView: UIView {
     // ── Gesture tracking ─────────────────────
     private var startTouchLocations: [UITouch: CGPoint] = [:]
     private var swipeConsumedTouches: Set<UITouch> = []
-    private let swipeThreshold: CGFloat = 18.0
+
+    /// Minimum vertical travel for a swipe. The effective threshold scales
+    /// with key height (see `swipeThreshold(for:)`), never below this.
+    private let minSwipeThreshold: CGFloat = 18.0
+    /// Swipe threshold as a fraction of the key's height (24pt on a 44pt key).
+    private let swipeThresholdPerKeyHeight: CGFloat = 0.55
+    /// A swipe must be this many times more vertical than horizontal
+    /// (1.5 ≈ within 34° of vertical). Was 1.0 (45°).
+    private let swipeDominance: CGFloat = 1.5
+    /// Swipes that dismiss the keyboard are destructive to flow, so they
+    /// need twice the travel.
+    private let dismissSwipeMultiplier: CGFloat = 2.0
+
+    /// Touches that were still down when another touch began (thumb
+    /// rollover during fast typing). Their vertical drift is the finger
+    /// lifting toward the next key, not a gesture, so swipes are ignored.
+    private var overlappedTouches: Set<UITouch> = []
+
+    /// Where each touch first landed. `startTouchLocations` is reset when a
+    /// touch slides onto another key; this one never is.
+    private var touchDownPoints: [UITouch: CGPoint] = [:]
+    /// Touches that slid off their initial key. Their touch-down point does
+    /// not belong to the committed key, so they are excluded from calibration.
+    private var retargetedTouches: Set<UITouch> = []
+    /// Bigram context captured when each touch began.
+    private var contextByTouch: [UITouch: BigramContext] = [:]
+
+    // ── Key order (rollover) ─────────────────
+    /// Press order of live touches, so rolled-over keys commit oldest first.
+    private var touchSequence: [UITouch: Int] = [:]
+    private var nextTouchSequence = 0
+    /// Touches whose key was committed early because another finger landed.
+    /// Their release must not fire the key again or hide the newer popup.
+    private var earlyCommittedTouches: Set<UITouch> = []
 
     // ── Touch Accuracy Model ─────────────────
     private var touchModel = TouchModel()
     private let bigramModel = BigramModel()
 
-    /// The last character the user typed. Set by KeyboardViewController
-    /// after each character insertion. Used for bigram-weighted targeting.
-    var lastTypedCharacter: Character?
+    /// Supplies the text context before the cursor at touch-down.
+    /// Owned by KeyboardViewController, which tracks its own insertions and
+    /// re-syncs from the document proxy after edits it can't track locally.
+    var bigramContextProvider: (() -> BigramContext)?
 
     /// How strongly bigram frequency influences key targeting.
     /// 0.0 = pure geometry. 0.35 = moderate bias. 0.6 = strong bias.
     var bigramInfluence: CGFloat = 0.25
 
-    /// Hysteresis bonus (in log-probability units) given to the currently
-    /// active key during touchesMoved. The finger must exceed this margin
-    /// before the active key switches. Prevents micro-drift key flipping.
-    private let hysteresisBonus: CGFloat = 2.0
+    /// During touchesMoved the active key keeps the touch until the finger
+    /// is this many points outside its hit cell. Prevents micro-drift flips.
+    private let hysteresisMargin: CGFloat = 6.0
 
-    /// Log-probability bonus for touches that land inside a key's visual
-    /// rectangle. Makes "clearly inside this key" nearly impossible to
-    /// override by a neighboring key's Gaussian score.
+    /// Width of the band on each side of a boundary between two CHARACTER
+    /// keys where the probabilistic model (Gaussian + bigram) may override
+    /// plain cell ownership. Outside the band, the cell owner always wins.
+    private let ambiguityBand: CGFloat = 6.0
+
+    /// Maximum penalty (log-probability units) for a neighbouring character
+    /// key. It grows linearly from 0 at the shared boundary to this value at
+    /// the far edge of the band, so the model decides freely at the boundary
+    /// and the owner becomes progressively harder to override.
     private let containmentBonus: CGFloat = 1.5
+
+    /// Hit cells on the outer edges of the keyboard extend this far beyond
+    /// the view, so slight overshoot during a slide doesn't cancel the key.
+    private let outerHitSlop: CGFloat = 20.0
+
+    // ── Calibration sample queue ──────────────
+    // Samples are held back for a few characters and dropped if the
+    // character they belong to is deleted, so typos don't train the model
+    // toward the wrong key. `nil` entries are placeholders for characters
+    // that produced no sample, keeping the queue aligned with the text.
+    private struct CalibrationSample {
+        let point: CGPoint
+        let center: CGPoint
+    }
+    private var pendingCalibration: [CalibrationSample?] = []
+    private let calibrationCommitDelay = 3
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MARK: - Configuration
@@ -141,6 +196,12 @@ final class KeyboardRenderView: UIView {
         activeKeyByTouch.removeAll()
         startTouchLocations.removeAll()
         swipeConsumedTouches.removeAll()
+        overlappedTouches.removeAll()
+        touchDownPoints.removeAll()
+        retargetedTouches.removeAll()
+        contextByTouch.removeAll()
+        touchSequence.removeAll()
+        earlyCommittedTouches.removeAll()
         dismissAllPickers()
         cursorModeTouches.removeAll()
         cursorModeLastX.removeAll()
@@ -166,18 +227,34 @@ final class KeyboardRenderView: UIView {
         var yOffset: CGFloat = 0
         var keyIndex = 0
 
-        for row in rows {
+        for (rowIndex, row) in rows.enumerated() {
             let rowH = row.baseHeight * scale
             let totalUnits = row.keys.reduce(CGFloat(0)) { $0 + $1.widthMultiplier }
             let totalSpacing = interKeySpacing * CGFloat(max(row.keys.count - 1, 0)) + edgeInset * 2
             let unitWidth = (totalWidth - totalSpacing) / totalUnits
             var xOffset = edgeInset
 
-            for keyDef in row.keys {
+            // Hit cells tile the keyboard with no gaps: each boundary sits in
+            // the middle of the visual gap between two keys, and the outer
+            // keys/rows extend past the view edges.
+            let isFirstRow = rowIndex == 0
+            let isLastRow = rowIndex == rows.count - 1
+            let cellTop = isFirstRow ? -outerHitSlop : yOffset - interRowSpacing / 2
+            let cellBottom = isLastRow ? bounds.height + outerHitSlop : yOffset + rowH + interRowSpacing / 2
+
+            for (keyInRow, keyDef) in row.keys.enumerated() {
                 guard keyIndex < keyViews.count else { break }
                 let kv = keyViews[keyIndex]
                 let keyW = unitWidth * keyDef.widthMultiplier
                 kv.frame = CGRect(x: xOffset, y: yOffset, width: keyW, height: rowH)
+
+                let cellLeft = keyInRow == 0 ? -outerHitSlop : xOffset - interKeySpacing / 2
+                let cellRight = keyInRow == row.keys.count - 1
+                    ? totalWidth + outerHitSlop
+                    : xOffset + keyW + interKeySpacing / 2
+                kv.hitRect = CGRect(x: cellLeft, y: cellTop,
+                                    width: cellRight - cellLeft, height: cellBottom - cellTop)
+
                 kv.layoutIfNeeded()
                 xOffset += keyW + interKeySpacing
                 keyIndex += 1
@@ -191,12 +268,26 @@ final class KeyboardRenderView: UIView {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        // KEY ORDER: commit keys that are still held BEFORE handling the new
+        // touches, so characters come out in press order. Must run first so
+        // the new touch's bigram context includes the committed character.
+        commitRolledOverTouches()
+
         for touch in touches {
-            guard let kv = hitKeyView(for: touch) else { continue }
+            // Any touch still down is now part of a rollover.
+            for other in activeKeyByTouch.keys { overlappedTouches.insert(other) }
+
+            let context = bigramContextProvider?() ?? .none
+            guard let kv = hitKeyView(for: touch, context: context) else { continue }
 
             // Track state
+            let pt = touch.location(in: self)
             activeKeyByTouch[touch] = kv
-            startTouchLocations[touch] = touch.location(in: self)
+            startTouchLocations[touch] = pt
+            touchDownPoints[touch] = pt
+            contextByTouch[touch] = context
+            touchSequence[touch] = nextTouchSequence
+            nextTouchSequence &+= 1
 
             kv.setHighlighted(true)
 
@@ -230,32 +321,35 @@ final class KeyboardRenderView: UIView {
 
             // 1. Process Gestures first
             if !swipeConsumedTouches.contains(touch),
+               !overlappedTouches.contains(touch),
                let startLoc = startTouchLocations[touch],
                let kv = activeKeyByTouch[touch] {
 
                 let dy = currentLoc.y - startLoc.y
                 let dx = currentLoc.x - startLoc.x
+                let threshold = swipeThreshold(for: kv)
 
-                // Ensure it's mostly vertical
-                if abs(dy) > abs(dx) {
-                    if dy > swipeThreshold {
+                // Must be clearly vertical
+                if abs(dy) > abs(dx) * swipeDominance {
+                    if dy > threshold {
                         // SWIPE DOWN — primary alt-action
                         if let alt = kv.definition.altAction {
                             longPressActionHandler?(alt)
+                            noteAltActionCommitted(alt)
                             kv.flashAlt()
                             swipeConsumedTouches.insert(touch)
                             cancelLongPress(for: touch)
                             hidePopup()
                             continue
                         }
-                    } else if dy < -swipeThreshold {
-                        if let swipeUp = kv.definition.swipeUpAction {
-                            actionHandler?(swipeUp)
-                            swipeConsumedTouches.insert(touch)
-                            cancelLongPress(for: touch)
-                            hidePopup()
-                            continue
-                        }
+                    } else if let swipeUp = kv.definition.swipeUpAction,
+                              dy < -threshold * (swipeUp == .dismissKeyboard ? dismissSwipeMultiplier : 1) {
+                        // SWIPE UP — tertiary action
+                        actionHandler?(swipeUp)
+                        swipeConsumedTouches.insert(touch)
+                        cancelLongPress(for: touch)
+                        hidePopup()
+                        continue
                     }
                 }
             }
@@ -280,7 +374,8 @@ final class KeyboardRenderView: UIView {
                 if abs(dyTotal) > abs(dxTotal) { continue }
             }
 
-            let newKV = hitKeyViewForMove(for: touch, currentKey: activeKeyByTouch[touch])
+            let newKV = hitKeyViewForMove(for: touch, currentKey: activeKeyByTouch[touch],
+                                          context: contextByTouch[touch] ?? .none)
             let oldKV = activeKeyByTouch[touch]
 
             if newKV !== oldKV {
@@ -291,6 +386,7 @@ final class KeyboardRenderView: UIView {
 
                 if let nkv = newKV {
                     activeKeyByTouch[touch] = nkv
+                    retargetedTouches.insert(touch)
                     nkv.setHighlighted(true)
                     startTouchLocations[touch] = currentLoc
 
@@ -318,9 +414,7 @@ final class KeyboardRenderView: UIView {
             if cursorModeTouches.contains(touch) {
                 exitCursorMode(touch: touch)
                 activeKeyByTouch[touch]?.setHighlighted(false)
-                activeKeyByTouch.removeValue(forKey: touch)
-                startTouchLocations.removeValue(forKey: touch)
-                swipeConsumedTouches.remove(touch)
+                cleanUpTouch(touch)
                 continue
             }
 
@@ -328,44 +422,101 @@ final class KeyboardRenderView: UIView {
             if let picker = pickerByTouch[touch] {
                 let selected = picker.selectedVariant
                 actionHandler?(.character(selected))
+                noteCharacterCommitted(sample: nil)
                 dismissPicker(for: touch)
                 activeKeyByTouch[touch]?.setHighlighted(false)
                 if activeKeyByTouch[touch]?.definition.action == .backspace { deleteEndedHandler?() }
-                activeKeyByTouch.removeValue(forKey: touch)
-                startTouchLocations.removeValue(forKey: touch)
-                swipeConsumedTouches.remove(touch)
+                cleanUpTouch(touch)
                 continue
             }
 
             if let kv = activeKeyByTouch[touch] {
                 kv.setHighlighted(false)
-                hidePopup()
+                // An early-committed key's popup is already gone; the popup on
+                // screen now belongs to the newer touch.
+                if !earlyCommittedTouches.contains(touch) { hidePopup() }
                 cancelLongPress(for: touch)
 
-                // ONLY fire standard action if a gesture/long-press didn't consume the touch
+                // ONLY fire standard action if a gesture/long-press/early
+                // commit didn't consume the touch
                 if !swipeConsumedTouches.contains(touch) {
                     actionHandler?(kv.definition.action)
-                }
-
-                // Record calibration sample for character keys
-                if !swipeConsumedTouches.contains(touch),
-                   kv.definition.style == .standard {
-                    let pt = touch.location(in: self)
-                    let center = CGPoint(x: kv.frame.midX, y: kv.frame.midY)
-                    touchModel.recordCalibrationSample(
-                        touchPoint: pt,
-                        keyCenter: center
-                    )
+                    queueCalibrationSample(for: touch, key: kv)
                 }
 
                 if kv.definition.action == .backspace { deleteEndedHandler?() }
             }
 
-            // Cleanup
-            activeKeyByTouch.removeValue(forKey: touch)
-            startTouchLocations.removeValue(forKey: touch)
-            swipeConsumedTouches.remove(touch)
+            cleanUpTouch(touch)
         }
+    }
+
+    /// Queues a calibration sample for a committed character key, using the
+    /// TOUCH-DOWN point. Touches that slid onto this key are queued as
+    /// placeholders: their touch-down point belongs to a different key.
+    private func queueCalibrationSample(for touch: UITouch, key kv: KeyView) {
+        guard case .character = kv.definition.action else { return }
+        var sample: CalibrationSample?
+        if kv.definition.style == .standard,
+           !retargetedTouches.contains(touch),
+           let down = touchDownPoints[touch] {
+            sample = CalibrationSample(point: down,
+                                       center: CGPoint(x: kv.frame.midX, y: kv.frame.midY))
+        }
+        noteCharacterCommitted(sample: sample)
+    }
+
+    // ── Key order (rollover) ─────────────────
+
+    /// When a new finger lands while earlier keys are still held, commit the
+    /// earlier keys now (oldest first), as the system keyboard does.
+    /// Otherwise fast two-thumb typing inserts in RELEASE order: press t,
+    /// press h, lift h, lift t → "ht".
+    ///
+    /// Only plain character and space keys commit early. Keys in the middle
+    /// of something (accent picker open, trackpad mode, swipe already fired)
+    /// and keys with hold behaviour (backspace repeat, shift) are left alone.
+    private func commitRolledOverTouches() {
+        let pending = activeKeyByTouch
+            .filter { touch, kv in
+                !swipeConsumedTouches.contains(touch)
+                    && pickerByTouch[touch] == nil
+                    && !cursorModeTouches.contains(touch)
+                    && Self.commitsOnRollover(kv.definition.action)
+            }
+            .sorted { (touchSequence[$0.key] ?? 0) < (touchSequence[$1.key] ?? 0) }
+
+        for (touch, kv) in pending {
+            cancelLongPress(for: touch)   // no accent picker / trackpad mode later
+            kv.setHighlighted(false)
+            hidePopup()
+            actionHandler?(kv.definition.action)
+            queueCalibrationSample(for: touch, key: kv)
+            // Consumed: release won't fire again, and the touch no longer
+            // swipes or slides onto other keys.
+            swipeConsumedTouches.insert(touch)
+            earlyCommittedTouches.insert(touch)
+        }
+    }
+
+    private static func commitsOnRollover(_ action: KeyAction) -> Bool {
+        switch action {
+        case .character, .space: return true
+        default:                 return false
+        }
+    }
+
+    /// Removes every piece of per-touch tracking state.
+    private func cleanUpTouch(_ touch: UITouch) {
+        activeKeyByTouch.removeValue(forKey: touch)
+        startTouchLocations.removeValue(forKey: touch)
+        swipeConsumedTouches.remove(touch)
+        overlappedTouches.remove(touch)
+        touchDownPoints.removeValue(forKey: touch)
+        retargetedTouches.remove(touch)
+        contextByTouch.removeValue(forKey: touch)
+        touchSequence.removeValue(forKey: touch)
+        earlyCommittedTouches.remove(touch)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -380,10 +531,7 @@ final class KeyboardRenderView: UIView {
             cancelLongPress(for: touch)
             if kv?.definition.action == .backspace { deleteEndedHandler?() }
 
-            // Cleanup
-            activeKeyByTouch.removeValue(forKey: touch)
-            startTouchLocations.removeValue(forKey: touch)
-            swipeConsumedTouches.remove(touch)
+            cleanUpTouch(touch)
         }
         hidePopup()
     }
@@ -392,110 +540,133 @@ final class KeyboardRenderView: UIView {
     // MARK: - Hit Testing (Gaussian + Containment + Hysteresis)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /// Initial hit test for touchesBegan. No hysteresis — pure scoring.
-    private func hitKeyView(for touch: UITouch) -> KeyView? {
-        let pt = touch.location(in: self)
-        return bestKeyView(at: pt, currentKey: nil)
+    /// Initial hit test for touchesBegan. No hysteresis.
+    private func hitKeyView(for touch: UITouch, context: BigramContext) -> KeyView? {
+        bestKeyView(at: touch.location(in: self), currentKey: nil, context: context)
     }
 
-    /// Hit test for touchesMoved. The currently active key receives a
-    /// hysteresis bonus so micro-drift during a press doesn't flip keys.
-    private func hitKeyViewForMove(for touch: UITouch, currentKey: KeyView?) -> KeyView? {
-        let pt = touch.location(in: self)
-        return bestKeyView(at: pt, currentKey: currentKey)
+    /// Hit test for touchesMoved. The active key keeps the touch until the
+    /// finger is `hysteresisMargin` outside its cell.
+    private func hitKeyViewForMove(for touch: UITouch, currentKey: KeyView?, context: BigramContext) -> KeyView? {
+        bestKeyView(at: touch.location(in: self), currentKey: currentKey, context: context)
     }
 
-    /// Core scoring logic. Evaluates ALL keys and returns the highest-scoring one.
+    /// Picks the key for a touch point.
     ///
-    /// Character keys (.standard style) are scored with:
-    ///   - Gaussian log-probability from finger position to key center
-    ///   - Containment bonus if the touch is inside the key's rectangle
-    ///   - Bigram weight from the previously typed character
+    /// 1. OWNERSHIP. Every key has a hit cell (its frame grown to the middle
+    ///    of the surrounding gaps, so cells tile the keyboard). The key whose
+    ///    cell contains the point owns it. A non-character key (shift,
+    ///    backspace, space, utility…) only ever receives touches inside its
+    ///    own cell, and a character key's cell can never be claimed by one.
+    ///    (Previously modifiers scored ~0 in a 8–12pt band OUTSIDE their
+    ///    frame, which beat letters near their own edges: the bottom of
+    ///    z…m went to space/return, the top of the number row to the
+    ///    utility row, the outer edges of z/m to shift/backspace.)
     ///
-    /// Non-character keys (modifier/spacebar/utility) are scored by distance
-    /// to the key's RECTANGLE EDGE. Any touch inside the frame scores 0, so
-    /// key width has no effect on hit reliability and wide keys (spacebar)
-    /// never lose their own touches to the rejection threshold.
-    ///
-    /// If `currentKey` is provided (during touchesMoved), that key receives
-    /// a hysteresis bonus so the finger must move significantly to switch.
-    private func bestKeyView(at pt: CGPoint, currentKey: KeyView?) -> KeyView? {
+    /// 2. DISAMBIGUATION, character keys only. Neighbouring character keys
+    ///    within `ambiguityBand` of the point compete with the owner on
+    ///    Gaussian + bigram score. A neighbour pays a penalty that rises from
+    ///    0 at the shared boundary to `containmentBonus` at the band's far
+    ///    edge, so the language model only matters for genuinely ambiguous
+    ///    touches.
+    private func bestKeyView(at pt: CGPoint, currentKey: KeyView?, context: BigramContext) -> KeyView? {
 
-        var bestKey: KeyView?
-        var bestScore: CGFloat = -.greatestFiniteMagnitude
+        // Hysteresis (touchesMoved only)
+        if let current = currentKey,
+           current.hitRect.insetBy(dx: -hysteresisMargin, dy: -hysteresisMargin).contains(pt) {
+            return current
+        }
 
-        for kv in keyViews {
-            let center = CGPoint(x: kv.frame.midX, y: kv.frame.midY)
-            var score: CGFloat
+        guard let owner = keyViews.first(where: { $0.hitRect.contains(pt) }) else { return nil }
+        guard owner.definition.style == .standard else { return owner }
 
-            if kv.definition.style == .standard {
-                // ── CHARACTER KEY: Gaussian + containment + bigram ──
+        var bestKey = owner
+        var bestScore = characterScore(for: owner, at: pt, context: context)
 
-                score = touchModel.logProbability(
-                    touchPoint: pt,
-                    keyCenter: center,
-                    scale: self.scale
-                )
-
-                // Containment bonus: touch inside this key's rect gets a
-                // strong advantage, making it nearly unbeatable by neighbors.
-                if kv.frame.contains(pt) {
-                    score += containmentBonus
-                }
-
-                // Bigram boost: context-sensitive weighting from previous letter
-                if bigramInfluence > 0,
-                   let prev = lastTypedCharacter,
-                   case .character(let c) = kv.definition.action,
-                   let next = c.lowercased().first {
-                    score += bigramModel.weight(prev: prev, next: next) * bigramInfluence
-                }
-
-            } else {
-                // ── NON-CHARACTER KEY: distance to rectangle edge ──
-                //
-                // Clamp the point to the key's frame; the distance from the
-                // touch to the clamped point is the distance to the nearest
-                // edge (0 anywhere inside). Score is independent of key
-                // width, which is what broke the old center-distance formula
-                // on the spacebar.
-
-                let clampedX = min(max(pt.x, kv.frame.minX), kv.frame.maxX)
-                let clampedY = min(max(pt.y, kv.frame.minY), kv.frame.maxY)
-                let dx = pt.x - clampedX
-                let dy = pt.y - clampedY
-                let edgeDistSq = dx * dx + dy * dy
-
-                let paddedRect = kv.frame.insetBy(dx: -8, dy: -12)
-                if paddedRect.contains(pt) {
-                    // Inside frame: edgeDistSq == 0 → score 0 (strong hit).
-                    // Inside padded band: small negative, still comfortably
-                    // above the rejection threshold.
-                    score = -edgeDistSq * 0.001
-                } else {
-                    // Outside padded area: decay smoothly.
-                    score = -edgeDistSq * 0.005 - 2.0
-                }
-            }
-
-            // Hysteresis: active key gets a bonus during touchesMoved.
-            // In touchesBegan, currentKey is nil → no bonus → pure scoring.
-            if let current = currentKey, kv === current {
-                score += hysteresisBonus
-            }
-
+        for kv in keyViews where kv !== owner && kv.definition.style == .standard {
+            let outside = Self.distance(from: pt, to: kv.hitRect)
+            guard outside < ambiguityBand else { continue }
+            let penalty = containmentBonus * (outside / ambiguityBand)
+            let score = characterScore(for: kv, at: pt, context: context) - penalty
             if score > bestScore {
                 bestScore = score
                 bestKey = kv
             }
         }
-
-        // Reject touches too far from any key. Contained touches always pass:
-        // character keys inside their own frame carry the containment bonus,
-        // and non-character keys inside their frame score exactly 0.
-        guard bestScore > -8.0 else { return nil }
-
         return bestKey
+    }
+
+    /// Gaussian log-probability of the point for this key, plus the bigram
+    /// weight of the key's letter given the preceding text.
+    private func characterScore(for kv: KeyView, at pt: CGPoint, context: BigramContext) -> CGFloat {
+        var score = touchModel.logProbability(
+            touchPoint: pt,
+            keyCenter: CGPoint(x: kv.frame.midX, y: kv.frame.midY),
+            keyWidth: kv.frame.width,
+            scale: scale
+        )
+        if bigramInfluence > 0,
+           case .character(let c) = kv.definition.action,
+           c.count == 1,
+           let next = c.lowercased().first {
+            score += bigramModel.weight(context: context, next: next) * bigramInfluence
+        }
+        return score
+    }
+
+    /// Distance from a point to a rectangle (0 if inside).
+    private static func distance(from pt: CGPoint, to rect: CGRect) -> CGFloat {
+        let dx = max(rect.minX - pt.x, 0, pt.x - rect.maxX)
+        let dy = max(rect.minY - pt.y, 0, pt.y - rect.maxY)
+        return (dx * dx + dy * dy).squareRoot()
+    }
+
+    // ── Swipe threshold ──────────────────────
+
+    private func swipeThreshold(for kv: KeyView) -> CGFloat {
+        max(minSwipeThreshold, kv.frame.height * swipeThresholdPerKeyHeight)
+    }
+
+    // ── Calibration queue ────────────────────
+
+    /// Records that one character was inserted by this view. `sample` is nil
+    /// when the character shouldn't train the model (accent picker, swipe
+    /// alt-character, slid-onto key).
+    private func noteCharacterCommitted(sample: CalibrationSample?) {
+        pendingCalibration.append(sample)
+        if pendingCalibration.count > calibrationCommitDelay {
+            commit(pendingCalibration.removeFirst())
+        }
+    }
+
+    /// Alt actions fired by swipe-down or long-press insert a character
+    /// that has no calibration sample; keep the queue aligned with the text.
+    private func noteAltActionCommitted(_ action: KeyAction) {
+        if case .character = action { noteCharacterCommitted(sample: nil) }
+    }
+
+    private func commit(_ sample: CalibrationSample?) {
+        guard let s = sample else { return }
+        touchModel.recordCalibrationSample(touchPoint: s.point, keyCenter: s.center, scale: scale)
+    }
+
+    /// Call when ONE character before the cursor was deleted (backspace).
+    /// Drops the sample for that character so the typo isn't learned.
+    func calibrationCharacterDeleted() {
+        if !pendingCalibration.isEmpty { pendingCalibration.removeLast() }
+    }
+
+    /// Call when the word is finished (space / return): the user accepted
+    /// what they typed, so the pending samples are trustworthy.
+    func calibrationCommitPending() {
+        pendingCalibration.forEach(commit)
+        pendingCalibration.removeAll()
+    }
+
+    /// Call when the text changed in a way the queue can't follow
+    /// (word delete, cursor move, paste, macro, emoji). Drops pending samples.
+    func calibrationDiscardPending() {
+        pendingCalibration.removeAll()
     }
 
     // ── Long press ───────────────────────────
@@ -531,6 +702,7 @@ final class KeyboardRenderView: UIView {
                     self.presentVariantPicker(for: kv, variants: variants, touch: touch)
                 } else if let alt = kv.definition.altAction {
                     self.longPressActionHandler?(alt)
+                    self.noteAltActionCommitted(alt)
                     kv.flashAlt()
                     self.swipeConsumedTouches.insert(touch)
                     self.hidePopup()
@@ -686,6 +858,9 @@ final class VariantPickerView: UIView {
 
         super.init(frame: CGRect(x: originX, y: originY, width: width, height: height))
 
+        // Must not receive touches: if another finger lands on the picker,
+        // its touch would be owned by this view and lost when it is removed.
+        isUserInteractionEnabled = false
         backgroundColor = UIColor.systemBackground
         layer.cornerRadius = 10
         layer.shadowColor = UIColor.black.cgColor
@@ -748,6 +923,9 @@ final class VariantPickerView: UIView {
 final class KeyView: UIView {
 
     let definition: KeyDefinition
+    /// Gap-filled touch target, in the keyboard's coordinate space.
+    /// Set by KeyboardRenderView.layoutKeys().
+    var hitRect: CGRect = .zero
     private let label = UILabel()
     private let altLabel = UILabel()
     private var currentShiftState: ShiftState
@@ -904,6 +1082,12 @@ final class KeyPopupView: UIView {
         let originY = keyView.frame.minY - popH - 4
 
         frame = CGRect(x: originX, y: max(originY, 0), width: popW, height: popH)
+        // Must not receive touches. The popup covers the row above the
+        // pressed key; during two-thumb typing the other thumb lands on it,
+        // and when the popup is removed that touch's touchesEnded never
+        // reaches KeyboardRenderView — the keystroke is dropped, the key
+        // stays highlighted, and per-touch state (timers, pickers) leaks.
+        isUserInteractionEnabled = false
         backgroundColor = UIColor.systemBackground
         layer.cornerRadius = 8
         layer.shadowColor = UIColor.black.cgColor

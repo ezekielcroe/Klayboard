@@ -23,7 +23,7 @@ enum BaseLayouts {
         KeyDefinition(id: "wordRight",  label: "sf:chevron.right.2",  action: .moveCursorForwardWord,  altAction: .moveCursorForward,  style: .utility),
         KeyDefinition(id: "format",     label: "Aa",                  action: .toggleCase,             altAction: .insertMacro("md_bold"), style: .utility),
         KeyDefinition(id: "tab",        label: "TAB",                 action: .character("\t"),        altAction: .shiftTab,           style: .utility),
-        KeyDefinition(id: "copy",       label: "sf:doc.on.doc",       action: .copy,                   altAction: .cut,                style: .utility),
+        KeyDefinition(id: "copy",       label: "sf:doc.on.doc",       action: .copy,                   altAction: .copyAndSave,        style: .utility), // no cut: selectedText may be truncated, so cut could delete text it never saved
         KeyDefinition(id: "paste",      label: "sf:doc.on.clipboard", action: .paste,                  altAction: .showClipboardHistory, style: .utility),
         KeyDefinition(id: "delWord",    label: "sf:delete.backward",  action: .deleteWord,             altAction: .deleteToLineStart,  style: .utility),
 
@@ -214,7 +214,7 @@ enum BaseLayouts {
         KeyDefinition(id: "wordRight",  label: "sf:chevron.right.2",  action: .moveCursorForward,  altAction: .moveCursorForwardWord,  style: .utility),
         KeyDefinition(id: "format",     label: "Aa",                  action: .toggleCase,             altAction: .insertMacro("md_bold"), style: .utility),
         KeyDefinition(id: "tab",        label: "TAB",                 action: .character("\t"),        altAction: .shiftTab,           style: .utility),
-        KeyDefinition(id: "copy",       label: "sf:doc.on.doc",       action: .copy,                   altAction: .cut,                style: .utility),
+        KeyDefinition(id: "copy",       label: "sf:doc.on.doc",       action: .copy,                   altAction: .copyAndSave,        style: .utility), // no cut: selectedText may be truncated, so cut could delete text it never saved
         KeyDefinition(id: "paste",      label: "sf:doc.on.clipboard", action: .paste,                  altAction: .showClipboardHistory, style: .utility),
         KeyDefinition(id: "delWord",    label: "sf:delete.backward",  action: .deleteWord,             altAction: .deleteToLineStart,  style: .utility),
 

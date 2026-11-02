@@ -20,6 +20,21 @@ final class KeyboardViewController: UIInputViewController {
     private var secondLastInsertedChar: Character?
     private var lastSpaceTapTime: TimeInterval = 0
 
+    // ── Caps lock ──────────────────────────────
+    /// Shift → caps lock only if the second tap lands within this window.
+    /// A slower second tap means "cancel shift", not "lock".
+    private static let capsLockDoubleTapWindow: CFTimeInterval = 0.35
+    private var lastShiftTapTime: CFTimeInterval = 0
+
+    // ── Bigram context ─────────────────────────
+    /// The last few characters before the cursor, maintained locally from
+    /// our own insertions. The document proxy's context lags our inserts
+    /// during fast typing, so it is only read (re-synced) after edits we
+    /// can't track character-by-character.
+    private var contextBuffer: String = ""
+    private var contextNeedsResync = true
+    private static let contextBufferLength = 4
+
     // ── Engines ────────────────────────────────
     private let macroEngine = MacroEngine()
     private let cursorEngine = CursorEngine()
@@ -86,8 +101,20 @@ final class KeyboardViewController: UIInputViewController {
         })
     }
 
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        // Next appearance may be a different field.
+        invalidateTextContext()
+    }
+
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
+        checkContextConsistency()
+    }
+
+    override func selectionDidChange(_ textInput: UITextInput?) {
+        super.selectionDidChange(textInput)
+        checkContextConsistency()
     }
 
     override func didReceiveMemoryWarning() {
@@ -142,6 +169,9 @@ final class KeyboardViewController: UIInputViewController {
         keyboardView.cursorModeEndedHandler = { [weak self] in
             self?.resetInsertTracking()
             self?.macroEngine.resetBuffer()
+        }
+        keyboardView.bigramContextProvider = { [weak self] in
+            self?.currentBigramContext() ?? .none
         }
         view.addSubview(keyboardView)
 
@@ -260,16 +290,12 @@ final class KeyboardViewController: UIInputViewController {
 
             textDocumentProxy.insertText(output)
             trackInserted(output)
+            appendContext(output)
 
             // 1. Feed the local macro engine
             macroEngine.feedKeystroke(output)
-            macroEngine.checkTriggerLocally(proxy: textDocumentProxy)
-
-            // 2. Feed the bigram model
-            if let ch = output.lowercased().first, ch >= "a", ch <= "z" {
-                keyboardView.lastTypedCharacter = ch
-            } else {
-                keyboardView.lastTypedCharacter = nil
+            if macroEngine.checkTriggerLocally(proxy: textDocumentProxy) {
+                invalidateTextContext()
             }
 
             // 3. THE UI FIX: Only update the view if the shift state actually dropped!
@@ -291,11 +317,15 @@ final class KeyboardViewController: UIInputViewController {
                 textDocumentProxy.insertText(". ")
 
                 trackInserted(". ") // This correctly updates last=" ", secondLast="."
+                if !contextBuffer.isEmpty { contextBuffer.removeLast() }
+                appendContext(". ")
 
                 // Keep local buffer perfectly in sync with the auto-period
                 macroEngine.handleBackspace()
                 macroEngine.feedKeystroke(". ")
-                macroEngine.checkTriggerLocally(proxy: textDocumentProxy)
+                if macroEngine.checkTriggerLocally(proxy: textDocumentProxy) {
+                    invalidateTextContext()
+                }
 
                 if shiftState == .off {
                     shiftState = .shifted
@@ -304,33 +334,47 @@ final class KeyboardViewController: UIInputViewController {
             } else {
                 textDocumentProxy.insertText(" ")
                 trackInserted(" ")
+                appendContext(" ")
 
                 macroEngine.feedKeystroke(" ")
-                macroEngine.checkTriggerLocally(proxy: textDocumentProxy)
+                if macroEngine.checkTriggerLocally(proxy: textDocumentProxy) {
+                    invalidateTextContext()
+                }
             }
-            // Space breaks bigram context
-            keyboardView.lastTypedCharacter = nil
+            // Word finished: the user accepted it, so its touches may train
+            // the calibration model.
+            keyboardView.calibrationCommitPending()
 
         case .returnKey:
             textDocumentProxy.insertText("\n")
             trackInserted("\n")
-            keyboardView.lastTypedCharacter = nil
+            appendContext("\n")
+            keyboardView.calibrationCommitPending()
             macroEngine.resetBuffer() // Newlines break macro context
 
         case .backspace:
             if !deleteRepeatHasFired {
                 textDocumentProxy.deleteBackward()
+                noteDeletedOneCharacter()
             }
-            resetInsertTracking()
+            lastInsertedChar = nil
+            secondLastInsertedChar = nil
             macroEngine.handleBackspace()
 
         // ── Modifiers ────────────────────────────
         case .shift:
+            let now = CACurrentMediaTime()
             switch shiftState {
-            case .off:      shiftState = .shifted
-            case .shifted:  shiftState = .capsLock
-            case .capsLock: shiftState = .off
+            case .off:
+                shiftState = .shifted
+            case .shifted:
+                // Quick double-tap locks; a slower second tap cancels shift.
+                let isDoubleTap = (now - lastShiftTapTime) < Self.capsLockDoubleTapWindow
+                shiftState = isDoubleTap ? .capsLock : .off
+            case .capsLock:
+                shiftState = .off
             }
+            lastShiftTapTime = now
             updateKeyboardView()
 
         case .capsLock:
@@ -386,6 +430,7 @@ final class KeyboardViewController: UIInputViewController {
         // ── Text manipulation ────────────────────
         case .toggleCase:
             cursorEngine.toggleCase(proxy: textDocumentProxy)
+            invalidateTextContext()
             macroEngine.resetBuffer()
 
         case .shiftTab:
@@ -400,12 +445,31 @@ final class KeyboardViewController: UIInputViewController {
 
         // ── Clipboard ────────────────────────────
         case .copy:
+            // Tap: copy only. Mark the change as seen so the history panel's
+            // next poll doesn't pick this copy up anyway.
             if let text = textDocumentProxy.selectedText, !text.isEmpty {
                 UIPasteboard.general.string = text
+                clipboardHistory.markCurrentClipboardSeen()
                 if text.count >= 80 {
                     showToast("Copied — may be truncated. Use system Copy for large selections.", warning: true)
                 } else {
                     showToast("Copied")
+                }
+            }
+
+        case .copyAndSave:
+            // Swipe down: copy AND save to Klayboard's history.
+            if let text = textDocumentProxy.selectedText, !text.isEmpty {
+                UIPasteboard.general.string = text
+                switch clipboardHistory.add(text) {
+                case .tooLarge:
+                    showToast("Copied — too large to save to history.", warning: true)
+                case .added, .empty:
+                    if text.count >= 80 {
+                        showToast("Copied & saved — may be truncated. Use system Copy for large selections.", warning: true)
+                    } else {
+                        showToast("Copied & saved")
+                    }
                 }
             }
 
@@ -465,7 +529,58 @@ final class KeyboardViewController: UIInputViewController {
     private func resetInsertTracking() {
         lastInsertedChar = nil
         secondLastInsertedChar = nil
-        keyboardView.lastTypedCharacter = nil
+        invalidateTextContext()
+    }
+
+    // ── Bigram context & calibration bookkeeping ──
+
+    private func appendContext(_ text: String) {
+        contextBuffer.append(text)
+        if contextBuffer.count > Self.contextBufferLength {
+            contextBuffer = String(contextBuffer.suffix(Self.contextBufferLength))
+        }
+    }
+
+    /// One character before the cursor was deleted by backspace.
+    private func noteDeletedOneCharacter() {
+        if contextBuffer.isEmpty {
+            contextNeedsResync = true
+        } else {
+            contextBuffer.removeLast()
+            // Emptied a short buffer: we no longer know what precedes the cursor.
+            if contextBuffer.isEmpty { contextNeedsResync = true }
+        }
+        keyboardView.calibrationCharacterDeleted()
+    }
+
+    /// The text before the cursor changed in a way we can't follow locally.
+    private func invalidateTextContext() {
+        contextNeedsResync = true
+        keyboardView?.calibrationDiscardPending()
+    }
+
+    /// Called by the render view at touch-down.
+    private func currentBigramContext() -> BigramContext {
+        if contextNeedsResync {
+            let before = textDocumentProxy.documentContextBeforeInput ?? ""
+            contextBuffer = String(before.suffix(Self.contextBufferLength))
+            contextNeedsResync = false
+        }
+        return BigramContext(previous: contextBuffer.last)
+    }
+
+    /// textDidChange / selectionDidChange fire for external edits and cursor
+    /// taps, but also (later) for our own insertions. The proxy may still be
+    /// a keystroke or two behind us, so if its context matches our buffer
+    /// minus its last 0–2 characters it is our own typing and is ignored.
+    private func checkContextConsistency() {
+        guard !contextNeedsResync else { return }
+        let before = textDocumentProxy.documentContextBeforeInput ?? ""
+        let consistent = (0...2).contains { k in
+            let tail = String(contextBuffer.dropLast(k))
+            return !tail.isEmpty && before.hasSuffix(tail)
+        }
+        if !consistent { invalidateTextContext() }
     }
 
     // ── Delete key repeat ────────────────────────
@@ -478,6 +593,7 @@ final class KeyboardViewController: UIInputViewController {
             guard let self = self else { return }
             self.deleteRepeatHasFired = true
             self.textDocumentProxy.deleteBackward()
+            self.noteDeletedOneCharacter()
 
             self.deleteRepeatCount = 0
             self.deleteTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
@@ -485,8 +601,10 @@ final class KeyboardViewController: UIInputViewController {
                 self.deleteRepeatCount += 1
                 if self.deleteRepeatCount > 5 {
                     self.cursorEngine.deleteBackwardWord(proxy: self.textDocumentProxy)
+                    self.invalidateTextContext()
                 } else {
                     self.textDocumentProxy.deleteBackward()
+                    self.noteDeletedOneCharacter()
                 }
             }
         }
@@ -613,6 +731,7 @@ extension KeyboardViewController: EmojiPickerViewDelegate {
 
     func emojiPickerDidTapBackspace() {
         textDocumentProxy.deleteBackward()
+        noteDeletedOneCharacter()
     }
 
     func emojiPickerDidDismiss() {
@@ -654,5 +773,9 @@ extension KeyboardViewController: ClipboardHistoryViewDelegate {
     func clipboardHistoryDidClear() {
         clipboardHistory.clearAll()
         clipboardHistoryView?.updateItems([])
+    }
+
+    func clipboardHistoryDidRemove(text: String) {
+        clipboardHistory.remove(text)
     }
 }

@@ -10,6 +10,7 @@ protocol ClipboardHistoryViewDelegate: AnyObject {
     func clipboardHistoryDidSelect(text: String)
     func clipboardHistoryDidDismiss()
     func clipboardHistoryDidClear()
+    func clipboardHistoryDidRemove(text: String)
 }
 
 final class ClipboardHistoryView: UIView {
@@ -20,6 +21,7 @@ final class ClipboardHistoryView: UIView {
     private let tableView = UITableView(frame: .zero, style: .plain)
     private let headerView = UIView()
     private let emptyLabel = UILabel()
+    private let clearButton = UIButton(type: .system)
     private let cellID = "ClipboardCell"
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -66,7 +68,6 @@ final class ClipboardHistoryView: UIView {
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         headerView.addSubview(closeButton)
 
-        let clearButton = UIButton(type: .system)
         clearButton.setTitle("Clear", for: .normal)
         clearButton.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .medium)
         clearButton.setTitleColor(.systemRed, for: .normal)
@@ -145,6 +146,7 @@ final class ClipboardHistoryView: UIView {
     func updateItems(_ newItems: [String]) {
         items = newItems
         emptyLabel.isHidden = !items.isEmpty
+        clearButton.isHidden = items.isEmpty
         tableView.reloadData()
     }
 }
@@ -204,10 +206,26 @@ extension ClipboardHistoryView: UITableViewDataSource, UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        // Capture the ITEM, not the index path. The handler runs when the
+        // user taps "Remove", by which time the list may have changed (e.g.
+        // Clear was tapped, or another row was removed) and the captured
+        // row would be stale or out of range → crash. Items are unique, so
+        // the text identifies the row.
+        guard indexPath.row < items.count else { return nil }
+        let text = items[indexPath.row]
+
         let delete = UIContextualAction(style: .destructive, title: "Remove") { [weak self] _, _, completion in
-            self?.items.remove(at: indexPath.row)
-            tableView.deleteRows(at: [indexPath], with: .automatic)
-            self?.emptyLabel.isHidden = !(self?.items.isEmpty ?? true)
+            guard let self = self, let row = self.items.firstIndex(of: text) else {
+                completion(false)
+                return
+            }
+            self.items.remove(at: row)
+            tableView.deleteRows(at: [IndexPath(row: row, section: indexPath.section)], with: .automatic)
+            self.emptyLabel.isHidden = !self.items.isEmpty
+            self.clearButton.isHidden = self.items.isEmpty
+            // Persist — previously only the on-screen copy was edited, so the
+            // item reappeared the next time the panel opened.
+            self.delegate?.clipboardHistoryDidRemove(text: text)
             completion(true)
         }
         return UISwipeActionsConfiguration(actions: [delete])

@@ -50,6 +50,7 @@ enum KeyAction: Codable, Hashable {
 
     // Clipboard
     case copy
+    case copyAndSave        // copy + add to Klayboard's clipboard history
     case cut
     case paste
     case showClipboardHistory

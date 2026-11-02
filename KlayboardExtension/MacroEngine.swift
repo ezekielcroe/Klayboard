@@ -88,9 +88,11 @@ final class MacroEngine {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /// Checks the local buffer for a trigger. NO synchronous proxy reads!
-    func checkTriggerLocally(proxy: UITextDocumentProxy) {
-        guard maxTriggerLength > 0 else { return }
-        guard !recentTypingBuffer.isEmpty else { return }
+    /// Returns true if a macro fired (the text before the cursor changed).
+    @discardableResult
+    func checkTriggerLocally(proxy: UITextDocumentProxy) -> Bool {
+        guard maxTriggerLength > 0 else { return false }
+        guard !recentTypingBuffer.isEmpty else { return false }
 
         for (trigger, expansion) in triggerMacros {
             if recentTypingBuffer.hasSuffix(trigger) {
@@ -105,8 +107,9 @@ final class MacroEngine {
                 
                 // Wipe the buffer so we don't double-fire
                 resetBuffer()
-                return // Only fire one macro per keystroke
+                return true // Only fire one macro per keystroke
             }
         }
+        return false
     }
 }

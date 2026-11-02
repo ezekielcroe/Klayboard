@@ -14,15 +14,66 @@
 
 import CoreGraphics
 
+/// What precedes the cursor, as far as key targeting is concerned.
+enum BigramContext: Equatable {
+    /// No usable context (digits, apostrophes, symbols, unknown) → no bias.
+    case none
+    /// Start of a word: start of field, or after whitespace / newline.
+    case wordStart
+    /// The previous character was this letter (lowercased).
+    case letter(Character)
+
+    /// Classifies the character immediately before the cursor.
+    /// Pass nil when nothing precedes the cursor (start of field).
+    init(previous: Character?) {
+        guard let c = previous else { self = .wordStart; return }
+        if c.isWhitespace || c.isNewline { self = .wordStart; return }
+        // Avoid Character(String): it traps if lowercasing ever yields more
+        // than one grapheme, and a trap here kills the keyboard.
+        let lowered = c.lowercased()
+        if lowered.count == 1,
+           let lower = lowered.first,
+           lower.unicodeScalars.count == 1,
+           let scalar = lower.unicodeScalars.first,
+           scalar.value >= 97, scalar.value <= 122 {
+            self = .letter(lower)
+        } else {
+            self = .none
+        }
+    }
+}
+
 struct BigramModel {
+
+    /// Returns the log-probability weight that `next` follows the given context.
+    /// Returns 0.0 (neutral / no influence) when there is no usable context
+    /// or `next` is not a letter.
+    func weight(context: BigramContext, next: Character) -> CGFloat {
+        guard let ni = Self.letterIndex(next) else { return 0.0 }
+        switch context {
+        case .none:
+            return 0.0
+        case .wordStart:
+            return Self.wordStartLogFreqs[ni]
+        case .letter(let prev):
+            guard let pi = Self.letterIndex(prev) else { return 0.0 }
+            return Self.logFreqs[pi][ni]
+        }
+    }
 
     /// Returns the log-probability weight that character `next` follows character `prev`.
     /// Returns 0.0 (neutral / no influence) for any non-lowercase-letter character.
     func weight(prev: Character, next: Character) -> CGFloat {
-        guard let pi = Self.letterIndex(prev),
-              let ni = Self.letterIndex(next) else { return 0.0 }
-        return Self.logFreqs[pi][ni]
+        weight(context: .letter(prev), next: next)
     }
+
+    /// log(P(first letter of a word = x)), English word-initial letter
+    /// frequencies, floored at -6.5 to match the bigram table's range.
+    /// Column order a … z.
+    static let wordStartLogFreqs: [CGFloat] = [
+        -2.15, -3.13, -2.96, -3.44, -3.58, -3.22, -4.14, -3.17, -2.62, -5.28, -4.76, -3.73, -3.27,
+        -3.77, -2.58, -3.15, -6.12, -3.58, -2.71, -1.84, -4.43, -4.81, -2.90, -6.50, -4.88, -6.50,
+    ]
 
     /// Maps a character to 0–25 index. Case-insensitive.
     private static func letterIndex(_ c: Character) -> Int? {
