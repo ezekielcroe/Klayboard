@@ -278,7 +278,7 @@ private final class InstallPage: UIViewController {
 
     weak var delegate: OnboardingPageDelegate?
     private let statusLabel = UILabel()
-    private let continueButton = makePrimaryButton(title: "Continue")
+    private let continueButton = makePrimaryButton(title: "Next")
     private var checkTimer: Timer?
     private var hasVisitedSettings = false
 
@@ -498,17 +498,14 @@ private final class InstallPage: UIViewController {
             // hasVisitedSettings branch below — expected, not a bug.
             statusLabel.text = "✓ Klayboard is enabled and ready"
             statusLabel.textColor = UIColor.systemGreen
-            continueButton.configuration?.title = "Next"
         } else if hasVisitedSettings {
             // User went to Settings and came back
-            statusLabel.text = "Done adding Klayboard? Tap Continue.\nYou'll be able to try it on the next screen."
+            statusLabel.text = "Done adding Klayboard? Tap Next.\nYou can try it out at the end of the tour."
             statusLabel.textColor = OnboardingConstants.subtleText
-            continueButton.configuration?.title = "Continue"
         } else {
             // Initial state
-            statusLabel.text = "Tap \"Open Settings\" above to get started."
+            statusLabel.text = "Tap \"Open Settings\" to add Klayboard, or tap Next to look around first."
             statusLabel.textColor = OnboardingConstants.subtleText
-            continueButton.configuration?.title = "Skip to Tour"
         }
     }
 

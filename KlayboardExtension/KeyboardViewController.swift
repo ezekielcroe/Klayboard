@@ -453,7 +453,7 @@ final class KeyboardViewController: UIInputViewController {
                 UIPasteboard.general.string = text
                 clipboardHistory.markCurrentClipboardSeen()
                 if text.count >= 80 {
-                    showToast("Copied — may be truncated. Use system Copy for large selections.", warning: true)
+                    showToast("Copied. Long text may be cut off — use system Copy.", warning: true)
                 } else {
                     showToast("Copied")
                 }
@@ -465,10 +465,10 @@ final class KeyboardViewController: UIInputViewController {
                 UIPasteboard.general.string = text
                 switch clipboardHistory.add(text) {
                 case .tooLarge:
-                    showToast("Copied — too large to save to history.", warning: true)
+                    showToast("Copied, but too long to save to history.", warning: true)
                 case .added, .empty:
                     if text.count >= 80 {
-                        showToast("Copied & saved — may be truncated. Use system Copy for large selections.", warning: true)
+                        showToast("Copied & saved. Long text may be cut off — use system Copy.", warning: true)
                     } else {
                         showToast("Copied & saved")
                     }
@@ -483,7 +483,7 @@ final class KeyboardViewController: UIInputViewController {
                 resetInsertTracking()
                 macroEngine.resetBuffer()
                 if mayBeTruncated {
-                    showToast("Cut — clipboard may be truncated. Use system Cut for large selections.", warning: true)
+                    showToast("Cut. Long text may be cut off — use system Cut.", warning: true)
                 } else {
                     showToast("Cut")
                 }
