@@ -34,6 +34,22 @@ final class SettingsViewController: UITableViewController {
         config = UserConfiguration.load()
         
         setupHeaderView()
+
+        // The keyboard adds clipboard items while the app is in the background.
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(refreshClipboardRow),
+            name: UIApplication.willEnterForegroundNotification, object: nil
+        )
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        refreshClipboardRow()
+    }
+
+    @objc private func refreshClipboardRow() {
+        guard isViewLoaded else { return }
+        tableView.reloadSections(IndexSet(integer: Section.data.rawValue), with: .none)
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -134,13 +150,13 @@ final class SettingsViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         guard let section = Section(rawValue: indexPath.section) else {
-            return tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+            return plainCell(for: indexPath)
         }
 
         switch section {
 
         case .setup:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+            let cell = plainCell(for: indexPath)
             cell.textLabel?.text = "Open Keyboard Settings"
             cell.textLabel?.textColor = .label
             cell.imageView?.image = UIImage(systemName: "gearshape.fill")
@@ -149,7 +165,7 @@ final class SettingsViewController: UITableViewController {
             return cell
 
         case .layout:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+            let cell = plainCell(for: indexPath)
             cell.accessoryView = nil
             
             let layouts: [LayoutID] = LayoutID.allCases.filter { $0 != .symbols }
@@ -162,14 +178,14 @@ final class SettingsViewController: UITableViewController {
             switch id {
             case .standard: cell.imageView?.image = UIImage(systemName: "keyboard")
             case .coding:   cell.imageView?.image = UIImage(systemName: "chevron.left.forwardslash.chevron.right")
-            case .markdown: cell.imageView?.image = UIImage(systemName: "text.format")
+            case .markdown: cell.imageView?.image = UIImage(systemName: "textformat")
             default: break
             }
             cell.imageView?.tintColor = .systemBlue
             return cell
 
         case .rows:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+            let cell = plainCell(for: indexPath)
             cell.accessoryView = nil
 
             if indexPath.row == RowMode.allCases.count {
@@ -216,7 +232,7 @@ final class SettingsViewController: UITableViewController {
             return altSchemeCell(for: indexPath, in: tableView)
 
         case .feedback:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+            let cell = plainCell(for: indexPath)
             cell.textLabel?.textColor = .label
             switch indexPath.row {
             case 0:
@@ -265,7 +281,7 @@ final class SettingsViewController: UITableViewController {
             return cell
 
         case .macros:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+            let cell = plainCell(for: indexPath)
             if indexPath.row < config.macros.count {
                 let macro = config.macros[indexPath.row]
                 
@@ -289,14 +305,40 @@ final class SettingsViewController: UITableViewController {
             return cell
             
         case .data:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-            cell.textLabel?.text = "Clear Clipboard History"
-            cell.textLabel?.textColor = .systemRed
-            cell.imageView?.image = UIImage(systemName: "trash.fill")
-            cell.imageView?.tintColor = .systemRed
+            let cell = plainCell(for: indexPath)
+            let count = storedClipboardItemCount()
             cell.accessoryType = .none
+            if count > 0 {
+                cell.textLabel?.text = "Clear Clipboard History (\(count))"
+                cell.textLabel?.textColor = .systemRed
+                cell.imageView?.tintColor = .systemRed
+                cell.selectionStyle = .default
+            } else {
+                // Also what the row turns into after a clear, so the user
+                // can see it worked.
+                cell.textLabel?.text = "Clipboard History Is Empty"
+                cell.textLabel?.textColor = .secondaryLabel
+                cell.imageView?.tintColor = .secondaryLabel
+                cell.selectionStyle = .none
+            }
+            cell.imageView?.image = UIImage(systemName: "trash.fill")
             return cell
         }
+    }
+
+    /// Dequeues a basic cell with everything a previous row may have set
+    /// cleared. Rows here add switches, attributed text and selection
+    /// styles; without this a reused cell carries them into the wrong row.
+    private func plainCell(for indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+        cell.textLabel?.attributedText = nil
+        cell.textLabel?.text = nil
+        cell.textLabel?.textColor = .label
+        cell.imageView?.image = nil
+        cell.accessoryView = nil
+        cell.accessoryType = .none
+        cell.selectionStyle = .default
+        return cell
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -415,16 +457,19 @@ final class SettingsViewController: UITableViewController {
             }
             
         case .data:
+            let count = storedClipboardItemCount()
+            guard count > 0 else { return }
             let alert = UIAlertController(
-                title: "Clear Clipboard",
-                message: "This will permanently delete your stored clipboard history from the Klayboard App Group.",
+                title: "Clear Clipboard History?",
+                message: "Deletes the \(count) item\(count == 1 ? "" : "s") Klayboard has saved. This can't be undone.",
                 preferredStyle: .alert
             )
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-            alert.addAction(UIAlertAction(title: "Clear History", style: .destructive) { _ in
-                if let defaults = UserDefaults(suiteName: AppConstants.appGroupID) {
-                    defaults.removeObject(forKey: AppConstants.clipboardHistoryKey)
-                }
+            alert.addAction(UIAlertAction(title: "Clear History", style: .destructive) { [weak self] _ in
+                UserDefaults(suiteName: AppConstants.appGroupID)?
+                    .removeObject(forKey: AppConstants.clipboardHistoryKey)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                self?.tableView.reloadRows(at: [indexPath], with: .fade)
             })
             present(alert, animated: true)
 
@@ -533,6 +578,15 @@ final class SettingsViewController: UITableViewController {
 
     private func saveConfig() {
         config.save()
+    }
+
+    /// Items the keyboard has saved to clipboard history (stored as a JSON
+    /// array of strings by ClipboardHistory).
+    private func storedClipboardItemCount() -> Int {
+        guard let data = UserDefaults(suiteName: AppConstants.appGroupID)?
+                .data(forKey: AppConstants.clipboardHistoryKey),
+              let items = try? JSONDecoder().decode([String].self, from: data) else { return 0 }
+        return items.count
     }
 }
 
