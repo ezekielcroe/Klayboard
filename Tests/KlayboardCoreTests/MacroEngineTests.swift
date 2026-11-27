@@ -76,19 +76,15 @@ struct MacroEngineTests {
         let trigger = ";;signature-long" // 16 characters
         let proxy = MockTextProxy()
         type(trigger, into: proxy, engine: engine(with: [(trigger, "Kind regards")]))
-        withKnownIssue("Bug: the typing buffer holds 15 characters, so longer triggers never match") {
-            #expect(proxy.text == "Kind regards")
-        }
+        #expect(proxy.text == "Kind regards")
     }
 
     @Test func longestOverlappingTriggerWins() {
         // "cab" ends with "ab": both triggers match after the last keystroke.
-        withKnownIssue("Bug: triggers are checked in dictionary order, so which one fires is arbitrary", isIntermittent: true) {
-            for _ in 0..<20 {
-                let proxy = MockTextProxy()
-                type("cab", into: proxy, engine: engine(with: [("ab", "SHORT"), ("cab", "LONG")]))
-                #expect(proxy.text == "LONG")
-            }
+        for _ in 0..<20 {
+            let proxy = MockTextProxy()
+            type("cab", into: proxy, engine: engine(with: [("ab", "SHORT"), ("cab", "LONG")]))
+            #expect(proxy.text == "LONG")
         }
     }
 }
