@@ -88,10 +88,7 @@ final class KeyCustomizationViewController: UIViewController {
     /// Returns the effective KeyDefinition after applying any existing override.
     private func effectiveDefinition(for keyID: String) -> KeyDefinition? {
         guard let base = allKeyDefs.first(where: { $0.def.id == keyID })?.def else { return nil }
-        if let ov = config.overrides.first(where: {
-            $0.targetKeyID == keyID &&
-            ($0.appliesToLayouts.isEmpty || $0.appliesToLayouts.contains(layoutID))
-        }) {
+        if let ov = config.overrides.first(where: { $0.targets(keyID, in: layoutID) }) {
             return KeyDefinition(
                 id: base.id,
                 label: ov.newLabel ?? base.label,
@@ -392,10 +389,7 @@ final class KeyCustomizationViewController: UIViewController {
         }
 
         // Remove any existing override for this key+layout
-        config.overrides.removeAll {
-            $0.targetKeyID == keyID &&
-            ($0.appliesToLayouts.isEmpty || $0.appliesToLayouts.contains(layoutID))
-        }
+        config.overrides.removeAll { $0.targets(keyID, in: layoutID) }
 
         // Check if this matches the base definition — if so, no override needed
         let baseDef = allKeyDefs.first(where: { $0.def.id == keyID })?.def
@@ -425,10 +419,7 @@ final class KeyCustomizationViewController: UIViewController {
     @objc private func clearOverride() {
         guard let keyID = selectedKeyID else { return }
 
-        config.overrides.removeAll {
-            $0.targetKeyID == keyID &&
-            ($0.appliesToLayouts.isEmpty || $0.appliesToLayouts.contains(layoutID))
-        }
+        config.overrides.removeAll { $0.targets(keyID, in: layoutID) }
 
         saveAndRefresh()
     }
@@ -442,9 +433,7 @@ final class KeyCustomizationViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         alert.addAction(UIAlertAction(title: "Reset", style: .destructive) { [weak self] _ in
             guard let self = self else { return }
-            self.config.overrides.removeAll {
-                $0.appliesToLayouts.contains(self.layoutID) || $0.appliesToLayouts.isEmpty
-            }
+            self.config.overrides.removeAll { $0.applies(to: self.layoutID) }
             self.saveAndRefresh()
         })
         present(alert, animated: true)
@@ -455,10 +444,7 @@ final class KeyCustomizationViewController: UIViewController {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private func hasOverride(for keyID: String) -> Bool {
-        config.overrides.contains {
-            $0.targetKeyID == keyID &&
-            ($0.appliesToLayouts.isEmpty || $0.appliesToLayouts.contains(layoutID))
-        }
+        config.overrides.contains { $0.targets(keyID, in: layoutID) }
     }
 
     private func saveAndRefresh() {

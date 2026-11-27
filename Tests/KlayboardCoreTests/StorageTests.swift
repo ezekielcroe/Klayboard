@@ -51,7 +51,7 @@ struct ConfigurationTests {
 
 @Suite("Clipboard history", .serialized)
 struct ClipboardHistoryTests {
-    private static let storageKey = "clipboardHistory"
+    private static let storageKey = AppConstants.clipboardHistoryKey
     private var defaults: UserDefaults { UserDefaults(suiteName: AppConstants.appGroupID)! }
 
     private func fresh() -> ClipboardHistory {

@@ -27,7 +27,7 @@ final class ClipboardHistory {
         case empty
         case tooLarge
     }
-    private static let storageKey = "clipboardHistory"
+    private static let storageKey = AppConstants.clipboardHistoryKey
 
     // ── State ────────────────────────────────
     private var items: [String] = []

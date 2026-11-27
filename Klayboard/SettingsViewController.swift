@@ -423,7 +423,7 @@ final class SettingsViewController: UITableViewController {
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
             alert.addAction(UIAlertAction(title: "Clear History", style: .destructive) { _ in
                 if let defaults = UserDefaults(suiteName: AppConstants.appGroupID) {
-                    defaults.removeObject(forKey: "clipboardHistory")
+                    defaults.removeObject(forKey: AppConstants.clipboardHistoryKey)
                 }
             })
             present(alert, animated: true)

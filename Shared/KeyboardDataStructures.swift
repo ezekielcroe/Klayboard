@@ -12,6 +12,7 @@ import CoreGraphics
 enum AppConstants {
     static let appGroupID      = "group.com.GeekyZeke.Klayboard"
     static let userConfigKey   = "userConfiguration"
+    static let clipboardHistoryKey = "clipboardHistory"
 }
 
 // ─────────────────────────────────────────────
@@ -250,6 +251,15 @@ struct UserOverride: Codable, Hashable, Identifiable {
         self.newswipeUpAction = newswipeUpAction
         self.appliesToLayouts = appliesToLayouts
     }
+
+    /// An empty `appliesToLayouts` means every layout.
+    func applies(to layout: LayoutID) -> Bool {
+        appliesToLayouts.isEmpty || appliesToLayouts.contains(layout)
+    }
+
+    func targets(_ keyID: String, in layout: LayoutID) -> Bool {
+        targetKeyID == keyID && applies(to: layout)
+    }
 }
 
 // ─────────────────────────────────────────────
@@ -339,9 +349,7 @@ extension UserConfiguration {
 
 extension KeyboardLayout {
     func applying(overrides: [UserOverride]) -> KeyboardLayout {
-        let applicable = overrides.filter {
-            $0.appliesToLayouts.isEmpty || $0.appliesToLayouts.contains(self.id)
-        }
+        let applicable = overrides.filter { $0.applies(to: id) }
         guard !applicable.isEmpty else { return self }
 
         let map = Dictionary(applicable.map { ($0.targetKeyID, $0) },
