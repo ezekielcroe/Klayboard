@@ -11,3 +11,7 @@ mergecode.py
 !.swiftpm/xcode/package.xcworkspace/
 .swiftpm/xcode/package.xcworkspace/*
 !.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+
+# Per-user Xcode state
+xcuserdata/
+.DS_Store

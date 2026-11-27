@@ -8,12 +8,11 @@ import UIKit
 final class MacroEngine {
 
     // ── Storage ──────────────────────────────
-    /// Combined dictionary: built-in macros + user-defined macros.
-    /// User macros override built-in macros with the same key.
+    /// Named built-in macros (e.g. "md_bold"), run by utility keys.
     private var expansions: [String: String] = [:]
 
     /// Cursor offset map for macros that need cursor repositioning.
-    private var cursorOffsets: [String: Int] = BuiltInMacros.cursorOffsets
+    private let cursorOffsets: [String: Int] = BuiltInMacros.cursorOffsets
 
     /// Trigger-based macros (e.g., "@@" → "user@example.com").
     /// These are checked against the local trailing text buffer after every keystroke.

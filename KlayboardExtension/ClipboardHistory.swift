@@ -113,13 +113,6 @@ final class ClipboardHistory {
         saveToStorage()
     }
 
-    /// Removes a single item at the given index.
-    func removeItem(at index: Int) {
-        guard index >= 0, index < items.count else { return }
-        items.remove(at: index)
-        saveToStorage()
-    }
-
     /// Removes an item by value. Items are de-duplicated on insert, so the
     /// text identifies exactly one entry. Safer than an index when the
     /// caller's list may be out of date with ours.
@@ -128,12 +121,6 @@ final class ClipboardHistory {
         items.remove(at: index)
         saveToStorage()
     }
-
-    /// Returns true if history is empty.
-    var isEmpty: Bool { items.isEmpty }
-
-    /// Number of items currently stored.
-    var count: Int { items.count }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MARK: - Persistence

@@ -1,11 +1,3 @@
-//
-//  AccentVariants.swift
-//  Klayboard
-//
-//  Created by Yeo Zhi Zheng on 5/7/26.
-//
-
-
 // AccentVariants.swift
 // Variant sets for the long-press picker: accents plus macOS Option-key
 // characters (Opt+p = π, Opt+g = ©, Opt+v = √, …).

@@ -12,7 +12,6 @@ import CoreGraphics
 enum AppConstants {
     static let appGroupID      = "group.com.GeekyZeke.Klayboard"
     static let userConfigKey   = "userConfiguration"
-    static let feedbackChanged = "PowerKeyboardConfigChanged"
 }
 
 // ─────────────────────────────────────────────
