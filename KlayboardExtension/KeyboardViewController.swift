@@ -93,11 +93,13 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
+        // keyboardView is sized by constraints (pinned to the edges, fixed
+        // height); let them resolve the new width instead of assigning a
+        // frame, which briefly made the key area as tall as the whole view.
         coordinator.animate(alongsideTransition: { _ in
             self.updateHeight()
-            self.keyboardView?.frame = CGRect(origin: .zero, size: size)
-            self.keyboardView?.setNeedsLayout()
-            self.keyboardView?.layoutIfNeeded()
+            self.view.setNeedsLayout()
+            self.view.layoutIfNeeded()
         })
     }
 
