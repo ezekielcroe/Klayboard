@@ -360,7 +360,6 @@ final class KeyboardViewController: UIInputViewController {
             }
             lastInsertedChar = nil
             secondLastInsertedChar = nil
-            macroEngine.handleBackspace()
 
         // ── Modifiers ────────────────────────────
         case .shift:
@@ -542,8 +541,13 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
-    /// One character before the cursor was deleted by backspace.
+    /// One character before the cursor was deleted by backspace (tap,
+    /// hold-to-repeat, or the emoji panel's ⌫). Every path goes through
+    /// here so the macro buffer always loses the same character the
+    /// document did; otherwise a later keystroke could complete a trigger
+    /// out of text that is no longer there and delete the wrong text.
     private func noteDeletedOneCharacter() {
+        macroEngine.handleBackspace()
         if contextBuffer.isEmpty {
             contextNeedsResync = true
         } else {
@@ -554,8 +558,12 @@ final class KeyboardViewController: UIInputViewController {
         keyboardView.calibrationCharacterDeleted()
     }
 
-    /// The text before the cursor changed in a way we can't follow locally.
+    /// The text before the cursor changed in a way we can't follow locally
+    /// (cursor moved by a tap, word delete, paste, a different field…).
+    /// The macro buffer no longer matches the document either, so it is
+    /// cleared: a trigger must be typed in one unbroken run to fire.
     private func invalidateTextContext() {
+        macroEngine.resetBuffer()
         contextNeedsResync = true
         keyboardView?.calibrationDiscardPending()
     }
