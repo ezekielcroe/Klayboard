@@ -56,7 +56,7 @@ final class KeyCustomizationViewController: UIViewController {
         title = "Customize Keys"
         view.backgroundColor = .systemGroupedBackground
 
-        layout = BaseLayouts.layout(for: layoutID, rowMode: config.rowMode)
+        layout = BaseLayouts.layout(for: layoutID, rowMode: config.rowMode, altScheme: config.altScheme)
         flattenKeys()
         buildUI()
         buildMiniKeyboard()
