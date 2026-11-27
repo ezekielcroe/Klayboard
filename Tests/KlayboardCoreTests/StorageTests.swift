@@ -102,9 +102,7 @@ struct ClipboardHistoryTests {
         keyboard.add("secret")
         defaults.removeObject(forKey: Self.storageKey)   // what the app does
         keyboard.add("new")
-        withKnownIssue("Bug: the keyboard's in-memory copy is written back over the cleared list") {
-            #expect(ClipboardHistory().recentItems == ["new"])
-        }
+        #expect(ClipboardHistory().recentItems == ["new"])
     }
 }
 

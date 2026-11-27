@@ -57,7 +57,9 @@ final class ClipboardHistory {
     /// Check if the system clipboard has changed since last poll.
     /// If so, capture the new content and prepend it to history.
     /// Call this from viewWillAppear, textDidChange, or before showing the panel.
+    /// Also re-reads storage, so the panel reflects a clear done in the app.
     func pollClipboard() {
+        loadFromStorage()
         let currentCount = UIPasteboard.general.changeCount
         guard currentCount != lastChangeCount else { return }
         lastChangeCount = currentCount
@@ -92,6 +94,10 @@ final class ClipboardHistory {
         let trimmed = newText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return .empty }
 
+        // The container app can clear history while this keyboard is
+        // running; start from what's stored, not a stale in-memory copy.
+        loadFromStorage()
+
         // Deduplicate: if this text is already in history, move it to the top
         items.removeAll { $0 == newText }
 
@@ -117,6 +123,7 @@ final class ClipboardHistory {
     /// text identifies exactly one entry. Safer than an index when the
     /// caller's list may be out of date with ours.
     func remove(_ text: String) {
+        loadFromStorage()
         guard let index = items.firstIndex(of: text) else { return }
         items.remove(at: index)
         saveToStorage()
