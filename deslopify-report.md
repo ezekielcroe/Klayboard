@@ -6,7 +6,7 @@ Klayboard is a custom iOS keyboard for power typists: a keyboard extension (`Kla
 
 **Overall state: healthy for a vibe-coded project, now with a safety net.** The code was already readable and well commented, with no secrets, no `TODO`s, no swallowed errors beyond two deliberate fallbacks, and no compiler warnings in a normal build. The serious problems were in the **text-expansion (macro) engine**, which could delete text you had typed in some everyday situations, and in **data shared between the app and the keyboard**, where clearing clipboard history in the app could be undone. Both are fixed.
 
-**Numbers:** 50 tests added (previously none). 10 bugs fixed, 2 build-config problems fixed, 4 behaviour-preserving cleanups. Nothing is Critical in the security sense (the app has no network code and no accounts), but the first macro bug changed or deleted text you had typed, which is the worst thing a keyboard can do.
+**Numbers:** 53 tests added (previously none). 10 bugs fixed, 2 build-config problems fixed, 4 behaviour-preserving cleanups. Nothing is Critical in the security sense (the app has no network code and no accounts), but the first macro bug changed or deleted text you had typed, which is the worst thing a keyboard can do.
 
 **Scope agreed in intake**
 - Change level: **Clean and fix**. Safe cleanup, tests and bug fixes; unclear intent comes back as a question; UX ideas are proposed, not built.
@@ -19,7 +19,7 @@ Klayboard is a custom iOS keyboard for power typists: a keyboard extension (`Kla
 ## How to run and verify
 
 - **App + keyboard:** open `Klayboard.xcodeproj`, run the `Klayboard` scheme, then add the keyboard in Settings → General → Keyboard → Keyboards → Add New Keyboard.
-- **Tests:** `scripts/test.sh` (defaults to the "iPhone 17" simulator; pass another name, e.g. `scripts/test.sh "iPhone Duo"`). 50 tests, all passing.
+- **Tests:** `scripts/test.sh` (defaults to the "iPhone 17" simulator; pass another name, e.g. `scripts/test.sh "iPhone Duo"`). 53 tests, all passing.
 
 ## Inventory
 
@@ -111,6 +111,6 @@ Ordered by impact on the critical flows.
 | 1 | Macros can only be added or edited in a two-field alert. No on/off switch, no warning for triggers that hijack normal typing (e.g. a single `a`). | A small macro editor screen: trigger, multi-line expansion, on/off switch, warning for risky triggers. | Medium | Open |
 | 2 | "Clear Clipboard History" gave no feedback after confirming. | Row shows the item count; after clearing it reads "Clipboard History Is Empty" (greyed, not tappable) with a success haptic. Confirmation says how many items will go. Refreshes when you return to the app. | Small | **Done**, checked in simulator |
 | 3 | Customize Keys used an emoji badge ("🔵 Q (customized)") and blocking "OK" alerts. | Plain blue "Customized" label; empty-field error shown under the field and cleared as you type; tapping a system key explains inline; buttons say "Save Key" and "Reset All". | Small | **Done**, checked in simulator |
-| 4 | The split keyboard uses a fixed gap. | A "Split width" slider under the split toggle. | Small–medium | Open |
+| 4 | The split keyboard used a fixed gap. | New "Wide Screens" section in Settings with the Split Keyboard toggle and a Gap slider (15–60% of the keyboard width, default 44%, the previous fixed value). Less gap brings the halves closer and widens the keys. The slider dims when splitting is off. | Small–medium | **Done**, checked in simulator |
 | 5 | Copy / cut warnings were long ("Copied — may be truncated. Use system Copy for large selections."). | Shortened to e.g. "Copied. Long text may be cut off — use system Copy." The 80-character threshold is unchanged: iOS doesn't tell the keyboard whether a selection was cut short, so it can't warn only when it actually happened. | Small | **Done** (wording only) |
 | 6 | Onboarding's Enable page button said "Skip to Tour" / "Continue" / "Next" depending on state. | Always "Next"; the status line does the guiding. | Small | **Done** |

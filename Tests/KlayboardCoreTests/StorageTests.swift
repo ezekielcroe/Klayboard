@@ -11,6 +11,7 @@ struct ConfigurationTests {
         config.activeLayoutID = .coding
         config.rowMode = .fiveRows
         config.splitsOnWideScreens = false
+        config.splitGap = 0.25
         config.macros = [MacroDefinition(trigger: "@@", expansion: "x")]
         config.save()
 
@@ -18,6 +19,7 @@ struct ConfigurationTests {
         #expect(loaded.activeLayoutID == .coding)
         #expect(loaded.rowMode == .fiveRows)
         #expect(loaded.splitsOnWideScreens == false)
+        #expect(loaded.splitGap == 0.25)
         #expect(loaded.macros.map(\.trigger) == ["@@"])
         defaults.removeObject(forKey: AppConstants.userConfigKey)
     }
@@ -29,11 +31,13 @@ struct ConfigurationTests {
         config.activeLayoutID = .markdown
         var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(config)) as! [String: Any]
         json.removeValue(forKey: "wideScreenSplit")
+        json.removeValue(forKey: "splitGapFraction")
         defaults.set(try JSONSerialization.data(withJSONObject: json), forKey: AppConstants.userConfigKey)
 
         let loaded = UserConfiguration.load()
         #expect(loaded.activeLayoutID == .markdown)
         #expect(loaded.splitsOnWideScreens)
+        #expect(loaded.splitGap == UserConfiguration.defaultSplitGap)
         defaults.removeObject(forKey: AppConstants.userConfigKey)
     }
 
@@ -41,6 +45,14 @@ struct ConfigurationTests {
         defaults.set(Data("not json".utf8), forKey: AppConstants.userConfigKey)
         #expect(UserConfiguration.load().activeLayoutID == UserConfiguration.default.activeLayoutID)
         defaults.removeObject(forKey: AppConstants.userConfigKey)
+    }
+
+    @Test func splitGapIsClamped() {
+        var config = UserConfiguration.default
+        config.splitGap = 5
+        #expect(config.splitGap == UserConfiguration.splitGapRange.upperBound)
+        config.splitGap = -1
+        #expect(config.splitGap == UserConfiguration.splitGapRange.lowerBound)
     }
 
     @Test func heightScaleIsClamped() {

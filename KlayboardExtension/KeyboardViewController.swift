@@ -209,6 +209,7 @@ final class KeyboardViewController: UIInputViewController {
 
         keyboardView.longPressDuration = config.longPressDuration
         keyboardView.splitOnWideScreens = config.splitsOnWideScreens
+        keyboardView.splitGap = CGFloat(config.splitGap)
 
         keyboardView.configure(
             rows: rows,

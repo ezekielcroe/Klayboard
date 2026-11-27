@@ -16,12 +16,13 @@ enum SplitLayout {
     /// Every iPhone, and the Duo's outer screen (466pt), stays below this.
     static let minimumWidth: CGFloat = 600
 
-    /// Share of the usable width taken by the two halves together. The rest
-    /// is the center gap.
-    static let keyAreaFraction: CGFloat = 0.56
+    /// Share of the usable width taken by the two halves together at the
+    /// default gap. The rest is the center gap.
+    static let keyAreaFraction: CGFloat = 1 - CGFloat(UserConfiguration.defaultSplitGap)
 
-    /// Upper bound on the halves' combined width, so very wide keyboards
-    /// widen the gap rather than the keys.
+    /// Upper bound on the halves' combined width at the default gap, so very
+    /// wide keyboards widen the gap rather than the keys. Scales with the
+    /// user's gap setting, so the slider still has an effect there.
     static let maxKeyAreaWidth: CGFloat = 620
 
     /// A spacebar straddling the midpoint is only cut in two if each half is
@@ -33,9 +34,14 @@ enum SplitLayout {
         enabled && usableWidth >= minimumWidth
     }
 
-    /// Combined width of the two halves for a given usable width.
-    static func keyAreaWidth(usableWidth: CGFloat) -> CGFloat {
-        min(usableWidth * keyAreaFraction, maxKeyAreaWidth)
+    /// Combined width of the two halves for a given usable width and gap
+    /// (the share of the width left empty in the middle).
+    static func keyAreaWidth(
+        usableWidth: CGFloat,
+        gap: CGFloat = CGFloat(UserConfiguration.defaultSplitGap)
+    ) -> CGFloat {
+        let fraction = 1 - gap
+        return min(usableWidth * fraction, maxKeyAreaWidth * fraction / keyAreaFraction)
     }
 
     /// Splits a row at its width midpoint.

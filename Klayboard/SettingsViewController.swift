@@ -14,6 +14,7 @@ final class SettingsViewController: UITableViewController {
         case setup = 0
         case layout
         case rows
+        case wideScreen
         case height
         case keyCustomization
         case feedback
@@ -104,7 +105,8 @@ final class SettingsViewController: UITableViewController {
         switch s {
         case .setup:            return 1
         case .layout:           return LayoutID.allCases.filter { $0 != .symbols }.count
-        case .rows:             return RowMode.allCases.count + 1  // + wide-screen split toggle
+        case .rows:             return RowMode.allCases.count
+        case .wideScreen:       return 2  // split toggle, split gap slider
         case .height:           return 1
         case .keyCustomization: return AltScheme.allCases.count
         case .feedback:         return 4
@@ -119,6 +121,7 @@ final class SettingsViewController: UITableViewController {
         case .setup:            return "Setup"
         case .layout:           return "Default Layout"
         case .rows:             return "Row Mode"
+        case .wideScreen:       return "Wide Screens"
         case .height:           return "Key Height"
         case .keyCustomization: return "Key Customization"
         case .feedback:         return "Feedback"
@@ -133,7 +136,9 @@ final class SettingsViewController: UITableViewController {
         case .setup:
             return "Go to Settings → General → Keyboard → Keyboards → Add New Keyboard → Klayboard."
         case .rows:
-            return "5 Rows hides the utility row (cursor/clipboard). Tap the ≡ button to toggle it back temporarily. Split on Wide Screens divides the keys into two thumb-sized halves when the keyboard is very wide, such as on an unfolded iPhone Duo."
+            return "5 Rows hides the utility row (cursor/clipboard). Tap the ≡ button to toggle it back temporarily."
+        case .wideScreen:
+            return "When the keyboard is very wide, such as on an unfolded iPhone Duo, split the keys into two halves for your thumbs. Gap sets how much empty space sits between them: less brings the halves closer and makes the keys wider."
         case .height:
             return "Adjust the height of all keys. Drag left for compact, right for taller keys."
         case .keyCustomization:
@@ -184,14 +189,10 @@ final class SettingsViewController: UITableViewController {
             cell.imageView?.tintColor = .systemBlue
             return cell
 
-        case .rows:
-            let cell = plainCell(for: indexPath)
-            cell.accessoryView = nil
-
-            if indexPath.row == RowMode.allCases.count {
-                cell.textLabel?.text = "Split on Wide Screens"
-                cell.textLabel?.textColor = .label
-                cell.accessoryType = .none
+        case .wideScreen:
+            if indexPath.row == 0 {
+                let cell = plainCell(for: indexPath)
+                cell.textLabel?.text = "Split Keyboard"
                 cell.selectionStyle = .none
                 cell.imageView?.image = UIImage(systemName: "rectangle.split.2x1")
                 cell.imageView?.tintColor = .systemTeal
@@ -202,8 +203,24 @@ final class SettingsViewController: UITableViewController {
                 cell.accessoryView = sw
                 return cell
             }
-            cell.selectionStyle = .default
+            let cell = tableView.dequeueReusableCell(withIdentifier: "slider", for: indexPath) as! SliderCell
+            let range = UserConfiguration.splitGapRange
+            cell.configure(
+                title: "Gap",
+                value: Float(config.splitGap),
+                min: Float(range.lowerBound), max: Float(range.upperBound),
+                valueString: String(format: "%.0f%%", config.splitGap * 100)
+            )
+            cell.setEnabled(config.splitsOnWideScreens)
+            cell.onValueChanged = { [weak self] val in
+                self?.config.splitGap = Double(val)
+                self?.saveConfig()
+                cell.updateValueLabel(String(format: "%.0f%%", val * 100))
+            }
+            return cell
 
+        case .rows:
+            let cell = plainCell(for: indexPath)
             let mode = RowMode.allCases[indexPath.row]
             cell.textLabel?.text = mode.displayName
             cell.textLabel?.textColor = .label
@@ -221,6 +238,7 @@ final class SettingsViewController: UITableViewController {
                 min: 0.75, max: 1.4,
                 valueString: String(format: "%.0f%%", config.height.scaleFactor * 100)
             )
+            cell.setEnabled(true)
             cell.onValueChanged = { [weak self] val in
                 self?.config.height.scaleFactor = CGFloat(val)
                 self?.saveConfig()
@@ -270,6 +288,7 @@ final class SettingsViewController: UITableViewController {
                     min: 0.15, max: 0.8,
                     valueString: String(format: "%.2fs", config.longPressDuration)
                 )
+                sliderCell.setEnabled(true)
                 sliderCell.onValueChanged = { [weak self] val in
                     self?.config.longPressDuration = Double(val)
                     self?.saveConfig()
@@ -434,7 +453,6 @@ final class SettingsViewController: UITableViewController {
             tableView.reloadSections(IndexSet(integer: section.rawValue), with: .none)
 
         case .rows:
-            guard indexPath.row < RowMode.allCases.count else { return }  // split toggle row
             config.rowMode = RowMode.allCases[indexPath.row]
             saveConfig()
             tableView.reloadSections(IndexSet(integer: section.rawValue), with: .none)
@@ -528,7 +546,10 @@ final class SettingsViewController: UITableViewController {
         case 0: config.hapticFeedbackEnabled = sender.isOn
         case 1: config.soundFeedbackEnabled = sender.isOn
         case 2: config.showKeyPopups = sender.isOn
-        case 3: config.splitsOnWideScreens = sender.isOn
+        case 3:
+            config.splitsOnWideScreens = sender.isOn
+            // The gap slider only applies while splitting is on.
+            tableView.reloadRows(at: [IndexPath(row: 1, section: Section.wideScreen.rawValue)], with: .none)
         default: break
         }
         saveConfig()
@@ -662,6 +683,13 @@ final class SliderCell: UITableViewCell {
 
     func updateValueLabel(_ text: String) {
         valueLabel.text = text
+    }
+
+    /// Dims the whole row when the setting it controls is inactive.
+    func setEnabled(_ enabled: Bool) {
+        slider.isEnabled = enabled
+        titleLabel.textColor = enabled ? .label : .tertiaryLabel
+        valueLabel.textColor = enabled ? .secondaryLabel : .tertiaryLabel
     }
 
     @objc private func sliderChanged() {

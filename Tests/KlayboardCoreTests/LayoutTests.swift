@@ -88,6 +88,23 @@ struct SplitLayoutTests {
         #expect(SplitLayout.keyAreaWidth(usableWidth: 5000) == SplitLayout.maxKeyAreaWidth)
     }
 
+    @Test func smallerGapMeansWiderKeys() {
+        // Unfolded iPhone Duo width.
+        let narrowGap = SplitLayout.keyAreaWidth(usableWidth: 951, gap: 0.2)
+        let defaultGap = SplitLayout.keyAreaWidth(usableWidth: 951)
+        let wideGap = SplitLayout.keyAreaWidth(usableWidth: 951, gap: 0.6)
+        #expect(narrowGap > defaultGap && defaultGap > wideGap)
+        #expect(abs(narrowGap - 951 * 0.8) < 0.001)
+    }
+
+    @Test func gapStillWorksOnVeryWideKeyboards() {
+        // Past the width cap, the slider must still change the key area.
+        let close = SplitLayout.keyAreaWidth(usableWidth: 3000, gap: 0.2)
+        let far = SplitLayout.keyAreaWidth(usableWidth: 3000, gap: 0.6)
+        #expect(close > far)
+        #expect(close < 3000)
+    }
+
     @Test func topLetterRowSplitsFiveAndFive() {
         let top = row(tag: .alpha, index: 0)
         let split = SplitLayout.split(top)

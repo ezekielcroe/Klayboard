@@ -304,6 +304,24 @@ struct UserConfiguration: Codable {
         set { wideScreenSplit = newValue }
     }
 
+    /// Optional for the same reason as `wideScreenSplit`.
+    /// Read through `splitGap`.
+    var splitGapFraction: Double? = nil
+
+    /// Share of the keyboard's width left empty between the two halves of
+    /// a split keyboard. Smaller = halves closer together, keys wider.
+    var splitGap: Double {
+        get { Self.clampedSplitGap(splitGapFraction ?? Self.defaultSplitGap) }
+        set { splitGapFraction = Self.clampedSplitGap(newValue) }
+    }
+
+    static let defaultSplitGap: Double = 0.44
+    static let splitGapRange: ClosedRange<Double> = 0.15...0.60
+
+    private static func clampedSplitGap(_ value: Double) -> Double {
+        min(max(value, splitGapRange.lowerBound), splitGapRange.upperBound)
+    }
+
     static let `default` = UserConfiguration(
         activeLayoutID: .standard,
         altScheme: .familiar,

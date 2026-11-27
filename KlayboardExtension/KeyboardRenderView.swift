@@ -29,6 +29,10 @@ final class KeyboardRenderView: UIView {
     var splitOnWideScreens: Bool = true {
         didSet { if splitOnWideScreens != oldValue { setNeedsLayout() } }
     }
+    /// Share of the width left empty between the halves (Settings slider).
+    var splitGap: CGFloat = CGFloat(UserConfiguration.defaultSplitGap) {
+        didSet { if splitGap != oldValue { setNeedsLayout() } }
+    }
     /// Hit cells on the inner edges of a split extend this far into the
     /// center gap, for thumbs that overshoot toward the middle.
     private let splitInnerHitSlop: CGFloat = 16.0
@@ -272,7 +276,7 @@ final class KeyboardRenderView: UIView {
 
         // Split: rows are laid out as a contiguous keyboard of `keyAreaWidth`
         // and every right-half key is shifted right by `gap`.
-        let keyAreaWidth = isSplit ? SplitLayout.keyAreaWidth(usableWidth: usableWidth) : usableWidth
+        let keyAreaWidth = isSplit ? SplitLayout.keyAreaWidth(usableWidth: usableWidth, gap: splitGap) : usableWidth
         let gap = usableWidth - keyAreaWidth
 
         var yOffset: CGFloat = 0
