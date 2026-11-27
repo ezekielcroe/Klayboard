@@ -39,14 +39,6 @@ enum BaseLayouts {
         KeyDefinition(id: "return",  label: "return",          action: .returnKey,              widthMultiplier: 1.5, style: .modifier),
     ], baseHeight: 44, tag: .bottom)
 
-    static let spacebarRowWithToggle = LayoutRow(keys: [
-        KeyDefinition(id: "utilToggle", label: "sf:slider.horizontal.3", action: .toggleUtilityRow, style: .utility),
-        KeyDefinition(id: "symbols",    label: "123",            action: .switchLayout(.symbols), widthMultiplier: 1.2, style: .modifier),
-        KeyDefinition(id: "globe",      label: "sf:globe",      action: .nextKeyboard,           style: .modifier),
-        KeyDefinition(id: "space",      label: " ",             action: .space, swipeUpAction: .dismissKeyboard, widthMultiplier: 4.8, style: .spacebar),
-        KeyDefinition(id: "return",     label: "return",        action: .returnKey,              widthMultiplier: 1.3, style: .modifier),
-    ], baseHeight: 44, tag: .bottom)
-
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MARK: - Alt Character Schemes
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -219,7 +211,7 @@ enum BaseLayouts {
         KeyDefinition(id: "delWord",    label: "sf:delete.backward",  action: .deleteWord,             altAction: .deleteToLineStart,  style: .utility),
 
         // Mode Switcher: Coding -> Markdown
-        KeyDefinition(id: "switchMode", label: "sf:text.format",      action: .switchLayout(.markdown), style: .utility),
+        KeyDefinition(id: "switchMode", label: "sf:textformat",       action: .switchLayout(.markdown), style: .utility),
     ], baseHeight: 38, tag: .utility)
 
     static let codingBottomRow = LayoutRow(keys: [
@@ -403,7 +395,9 @@ enum BaseLayouts {
                                 action: k.action,
                                 altAction: k.altAction,
                                 swipeUpAction: k.swipeUpAction,
-                                widthMultiplier: max(k.widthMultiplier - 1.0, 3.5),
+                                // Give up one unit, but don't go below 3.5
+                                // (and never widen an already-narrow spacebar).
+                                widthMultiplier: min(k.widthMultiplier, max(k.widthMultiplier - 1.0, 3.5)),
                                 style: k.style
                             )
                         }

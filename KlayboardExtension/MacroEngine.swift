@@ -8,21 +8,22 @@ import UIKit
 final class MacroEngine {
 
     // ── Storage ──────────────────────────────
-    /// Combined dictionary: built-in macros + user-defined macros.
-    /// User macros override built-in macros with the same key.
+    /// Named built-in macros (e.g. "md_bold"), run by utility keys.
     private var expansions: [String: String] = [:]
 
     /// Cursor offset map for macros that need cursor repositioning.
-    private var cursorOffsets: [String: Int] = BuiltInMacros.cursorOffsets
+    private let cursorOffsets: [String: Int] = BuiltInMacros.cursorOffsets
 
-    /// Trigger-based macros (e.g., "@@" → "user@example.com").
-    /// These are checked against the local trailing text buffer after every keystroke.
-    private var triggerMacros: [String: String] = [:]
-    private var maxTriggerLength: Int = 0
+    /// Trigger-based macros (e.g., "@@" → "user@example.com"), longest
+    /// trigger first. Checked against the local trailing text buffer after
+    /// every keystroke; when several triggers end the buffer ("ab" and
+    /// "cab"), the longest one wins.
+    private var triggerMacros: [(trigger: String, expansion: String)] = []
 
     // ── Local tracking buffer ────────────────
     private var recentTypingBuffer: String = ""
-    private let maxBufferLength: Int = 15 // Keeps memory footprint virtually zero
+    /// Long enough to hold the longest trigger; at least 15 characters.
+    private var maxBufferLength: Int = 15
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // MARK: - Loading
@@ -32,12 +33,18 @@ final class MacroEngine {
         // Start with built-in macros (keyed by macro name, e.g. "md_bold")
         expansions = builtIn
 
-        // User-defined trigger macros
-        triggerMacros.removeAll()
-        for macro in user where macro.isEnabled {
-            triggerMacros[macro.trigger] = macro.expansion
+        // User-defined trigger macros. A later macro with the same trigger
+        // replaces an earlier one.
+        var byTrigger: [String: String] = [:]
+        for macro in user where macro.isEnabled && !macro.trigger.isEmpty {
+            byTrigger[macro.trigger] = macro.expansion
         }
-        maxTriggerLength = triggerMacros.keys.map(\.count).max() ?? 0
+        triggerMacros = byTrigger
+            .map { (trigger: $0.key, expansion: $0.value) }
+            .sorted { $0.trigger.count != $1.trigger.count
+                ? $0.trigger.count > $1.trigger.count
+                : $0.trigger < $1.trigger }
+        maxBufferLength = max(15, triggerMacros.first?.trigger.count ?? 0)
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -91,8 +98,7 @@ final class MacroEngine {
     /// Returns true if a macro fired (the text before the cursor changed).
     @discardableResult
     func checkTriggerLocally(proxy: UITextDocumentProxy) -> Bool {
-        guard maxTriggerLength > 0 else { return false }
-        guard !recentTypingBuffer.isEmpty else { return false }
+        guard !triggerMacros.isEmpty, !recentTypingBuffer.isEmpty else { return false }
 
         for (trigger, expansion) in triggerMacros {
             if recentTypingBuffer.hasSuffix(trigger) {

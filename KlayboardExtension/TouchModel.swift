@@ -127,7 +127,7 @@ struct TouchModel {
         }
     }
 
-    // ── Load / Save / Reset ─────────────────────────
+    // ── Load / Save ─────────────────────────────────
 
     /// Loads the persisted offset. Call once when the render view is created.
     mutating func loadCalibration() {
@@ -147,17 +147,5 @@ struct TouchModel {
         guard let defaults = UserDefaults(suiteName: AppConstants.appGroupID) else { return }
         defaults.set(Double(calibrationOffset.x), forKey: Self.calibrationXKey)
         defaults.set(Double(calibrationOffset.y), forKey: Self.calibrationYKey)
-    }
-
-    /// Resets calibration to zero and clears persisted state.
-    /// The Settings app can achieve the same by removing both keys from the
-    /// App Group suite; the extension picks that up on its next cold launch.
-    mutating func resetCalibration() {
-        calibrationOffset = .zero
-        samplesSinceSave = 0
-        guard let defaults = UserDefaults(suiteName: AppConstants.appGroupID) else { return }
-        defaults.removeObject(forKey: Self.calibrationXKey)
-        defaults.removeObject(forKey: Self.calibrationYKey)
-        Self.legacyKeys.forEach { defaults.removeObject(forKey: $0) }
     }
 }

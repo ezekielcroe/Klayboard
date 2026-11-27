@@ -16,7 +16,26 @@ final class KeyboardRenderView: UIView {
     var cursorModeEndedHandler: (() -> Void)?
 
     // ── Layout data ──────────────────────────
+    /// Rows as configured by the controller.
+    private var sourceRows: [LayoutRow] = []
+    /// Rows as rendered: `sourceRows`, or their split form when `isSplit`.
     private var rows: [LayoutRow] = []
+    /// Per rendered row, the index of the first right-half key (split only).
+    private var rightHalfStarts: [Int] = []
+    /// Whether the rendered rows are currently split. Decided in
+    /// layoutSubviews from the usable width, so it follows fold/unfold.
+    private var isSplit = false
+    /// User preference; the split only happens when the keyboard is wide.
+    var splitOnWideScreens: Bool = true {
+        didSet { if splitOnWideScreens != oldValue { setNeedsLayout() } }
+    }
+    /// Share of the width left empty between the halves (Settings slider).
+    var splitGap: CGFloat = CGFloat(UserConfiguration.defaultSplitGap) {
+        didSet { if splitGap != oldValue { setNeedsLayout() } }
+    }
+    /// Hit cells on the inner edges of a split extend this far into the
+    /// center gap, for thumbs that overshoot toward the middle.
+    private let splitInnerHitSlop: CGFloat = 16.0
     private var scale: CGFloat = 1.0
     private var shiftState: ShiftState = .off
     private var showPopups: Bool = true
@@ -140,13 +159,29 @@ final class KeyboardRenderView: UIView {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     func configure(rows: [LayoutRow], scale: CGFloat, shiftState: ShiftState, showPopups: Bool) {
-        let newFingerprint = Self.fingerprint(for: rows)
-        let layoutChanged = (newFingerprint != layoutFingerprint)
-
-        self.rows = rows
+        self.sourceRows = rows
         self.scale = scale
         self.shiftState = shiftState
         self.showPopups = showPopups
+        applyRows()
+    }
+
+    /// Derives the rendered rows from `sourceRows` and `isSplit`, rebuilding
+    /// key views only if the set of keys changed.
+    private func applyRows() {
+        if isSplit {
+            let split = sourceRows.map(SplitLayout.split)
+            rows = zip(sourceRows, split).map { source, s in
+                LayoutRow(keys: s.keys, baseHeight: source.baseHeight, tag: source.tag)
+            }
+            rightHalfStarts = split.map(\.rightStart)
+        } else {
+            rows = sourceRows
+            rightHalfStarts = []
+        }
+
+        let newFingerprint = Self.fingerprint(for: rows)
+        let layoutChanged = (newFingerprint != layoutFingerprint)
 
         if layoutChanged {
             layoutFingerprint = newFingerprint
@@ -180,7 +215,18 @@ final class KeyboardRenderView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        let usableWidth = bounds.width - safeAreaInsets.left - safeAreaInsets.right
+        let wantsSplit = SplitLayout.shouldSplit(usableWidth: usableWidth, enabled: splitOnWideScreens)
+        if wantsSplit != isSplit {
+            isSplit = wantsSplit
+            applyRows()
+        }
         layoutKeys()
+    }
+
+    override func safeAreaInsetsDidChange() {
+        super.safeAreaInsetsDidChange()
+        setNeedsLayout()
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -222,8 +268,17 @@ final class KeyboardRenderView: UIView {
     }
 
     private func layoutKeys() {
-        let totalWidth = bounds.width
-        guard totalWidth > 0 else { return }
+        // Keys stay inside the safe area: a horizontal inset (such as a
+        // vertical system bar) can sit on either edge, independently.
+        let contentMinX = safeAreaInsets.left
+        let usableWidth = bounds.width - safeAreaInsets.left - safeAreaInsets.right
+        guard usableWidth > 0 else { return }
+
+        // Split: rows are laid out as a contiguous keyboard of `keyAreaWidth`
+        // and every right-half key is shifted right by `gap`.
+        let keyAreaWidth = isSplit ? SplitLayout.keyAreaWidth(usableWidth: usableWidth, gap: splitGap) : usableWidth
+        let gap = usableWidth - keyAreaWidth
+
         var yOffset: CGFloat = 0
         var keyIndex = 0
 
@@ -231,12 +286,15 @@ final class KeyboardRenderView: UIView {
             let rowH = row.baseHeight * scale
             let totalUnits = row.keys.reduce(CGFloat(0)) { $0 + $1.widthMultiplier }
             let totalSpacing = interKeySpacing * CGFloat(max(row.keys.count - 1, 0)) + edgeInset * 2
-            let unitWidth = (totalWidth - totalSpacing) / totalUnits
-            var xOffset = edgeInset
+            let unitWidth = (keyAreaWidth - totalSpacing) / totalUnits
+            let rightStart = isSplit ? rightHalfStarts[rowIndex] : row.keys.count
+            var xOffset = contentMinX + edgeInset
 
             // Hit cells tile the keyboard with no gaps: each boundary sits in
             // the middle of the visual gap between two keys, and the outer
-            // keys/rows extend past the view edges.
+            // keys/rows extend past the view edges. In a split, the inner
+            // edges reach only `splitInnerHitSlop` into the center gap, so
+            // the middle of the gap is dead space.
             let isFirstRow = rowIndex == 0
             let isLastRow = rowIndex == rows.count - 1
             let cellTop = isFirstRow ? -outerHitSlop : yOffset - interRowSpacing / 2
@@ -245,13 +303,26 @@ final class KeyboardRenderView: UIView {
             for (keyInRow, keyDef) in row.keys.enumerated() {
                 guard keyIndex < keyViews.count else { break }
                 let kv = keyViews[keyIndex]
+                if keyInRow == rightStart, keyInRow > 0 { xOffset += gap }
                 let keyW = unitWidth * keyDef.widthMultiplier
                 kv.frame = CGRect(x: xOffset, y: yOffset, width: keyW, height: rowH)
 
-                let cellLeft = keyInRow == 0 ? -outerHitSlop : xOffset - interKeySpacing / 2
-                let cellRight = keyInRow == row.keys.count - 1
-                    ? totalWidth + outerHitSlop
-                    : xOffset + keyW + interKeySpacing / 2
+                let cellLeft: CGFloat
+                if keyInRow == 0 {
+                    cellLeft = -outerHitSlop
+                } else if keyInRow == rightStart {
+                    cellLeft = xOffset - splitInnerHitSlop
+                } else {
+                    cellLeft = xOffset - interKeySpacing / 2
+                }
+                let cellRight: CGFloat
+                if keyInRow == row.keys.count - 1 {
+                    cellRight = bounds.width + outerHitSlop
+                } else if keyInRow == rightStart - 1 {
+                    cellRight = xOffset + keyW + splitInnerHitSlop
+                } else {
+                    cellRight = xOffset + keyW + interKeySpacing / 2
+                }
                 kv.hitRect = CGRect(x: cellLeft, y: cellTop,
                                     width: cellRight - cellLeft, height: cellBottom - cellTop)
 
@@ -729,9 +800,10 @@ final class KeyboardRenderView: UIView {
         // stop competing with the drag.
         swipeConsumedTouches.insert(touch)
 
-        // Visual cue: dim everything but the spacebar.
+        // Visual cue: dim everything but the spacebar (both halves of a
+        // split spacebar).
         UIView.animate(withDuration: 0.15) {
-            for kv in self.keyViews where kv !== spacebar {
+            for kv in self.keyViews where kv !== spacebar && kv.definition.action != .space {
                 kv.alpha = 0.35
             }
         }

@@ -93,11 +93,13 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
+        // keyboardView is sized by constraints (pinned to the edges, fixed
+        // height); let them resolve the new width instead of assigning a
+        // frame, which briefly made the key area as tall as the whole view.
         coordinator.animate(alongsideTransition: { _ in
             self.updateHeight()
-            self.keyboardView?.frame = CGRect(origin: .zero, size: size)
-            self.keyboardView?.setNeedsLayout()
-            self.keyboardView?.layoutIfNeeded()
+            self.view.setNeedsLayout()
+            self.view.layoutIfNeeded()
         })
     }
 
@@ -206,6 +208,8 @@ final class KeyboardViewController: UIInputViewController {
         )
 
         keyboardView.longPressDuration = config.longPressDuration
+        keyboardView.splitOnWideScreens = config.splitsOnWideScreens
+        keyboardView.splitGap = CGFloat(config.splitGap)
 
         keyboardView.configure(
             rows: rows,
@@ -359,7 +363,6 @@ final class KeyboardViewController: UIInputViewController {
             }
             lastInsertedChar = nil
             secondLastInsertedChar = nil
-            macroEngine.handleBackspace()
 
         // ── Modifiers ────────────────────────────
         case .shift:
@@ -451,7 +454,7 @@ final class KeyboardViewController: UIInputViewController {
                 UIPasteboard.general.string = text
                 clipboardHistory.markCurrentClipboardSeen()
                 if text.count >= 80 {
-                    showToast("Copied — may be truncated. Use system Copy for large selections.", warning: true)
+                    showToast("Copied. Long text may be cut off — use system Copy.", warning: true)
                 } else {
                     showToast("Copied")
                 }
@@ -463,10 +466,10 @@ final class KeyboardViewController: UIInputViewController {
                 UIPasteboard.general.string = text
                 switch clipboardHistory.add(text) {
                 case .tooLarge:
-                    showToast("Copied — too large to save to history.", warning: true)
+                    showToast("Copied, but too long to save to history.", warning: true)
                 case .added, .empty:
                     if text.count >= 80 {
-                        showToast("Copied & saved — may be truncated. Use system Copy for large selections.", warning: true)
+                        showToast("Copied & saved. Long text may be cut off — use system Copy.", warning: true)
                     } else {
                         showToast("Copied & saved")
                     }
@@ -481,7 +484,7 @@ final class KeyboardViewController: UIInputViewController {
                 resetInsertTracking()
                 macroEngine.resetBuffer()
                 if mayBeTruncated {
-                    showToast("Cut — clipboard may be truncated. Use system Cut for large selections.", warning: true)
+                    showToast("Cut. Long text may be cut off — use system Cut.", warning: true)
                 } else {
                     showToast("Cut")
                 }
@@ -541,8 +544,13 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
-    /// One character before the cursor was deleted by backspace.
+    /// One character before the cursor was deleted by backspace (tap,
+    /// hold-to-repeat, or the emoji panel's ⌫). Every path goes through
+    /// here so the macro buffer always loses the same character the
+    /// document did; otherwise a later keystroke could complete a trigger
+    /// out of text that is no longer there and delete the wrong text.
     private func noteDeletedOneCharacter() {
+        macroEngine.handleBackspace()
         if contextBuffer.isEmpty {
             contextNeedsResync = true
         } else {
@@ -553,8 +561,12 @@ final class KeyboardViewController: UIInputViewController {
         keyboardView.calibrationCharacterDeleted()
     }
 
-    /// The text before the cursor changed in a way we can't follow locally.
+    /// The text before the cursor changed in a way we can't follow locally
+    /// (cursor moved by a tap, word delete, paste, a different field…).
+    /// The macro buffer no longer matches the document either, so it is
+    /// cleared: a trigger must be typed in one unbroken run to fire.
     private func invalidateTextContext() {
+        macroEngine.resetBuffer()
         contextNeedsResync = true
         keyboardView?.calibrationDiscardPending()
     }

@@ -12,7 +12,7 @@ import CoreGraphics
 enum AppConstants {
     static let appGroupID      = "group.com.GeekyZeke.Klayboard"
     static let userConfigKey   = "userConfiguration"
-    static let feedbackChanged = "PowerKeyboardConfigChanged"
+    static let clipboardHistoryKey = "clipboardHistory"
 }
 
 // ─────────────────────────────────────────────
@@ -251,6 +251,15 @@ struct UserOverride: Codable, Hashable, Identifiable {
         self.newswipeUpAction = newswipeUpAction
         self.appliesToLayouts = appliesToLayouts
     }
+
+    /// An empty `appliesToLayouts` means every layout.
+    func applies(to layout: LayoutID) -> Bool {
+        appliesToLayouts.isEmpty || appliesToLayouts.contains(layout)
+    }
+
+    func targets(_ keyID: String, in layout: LayoutID) -> Bool {
+        targetKeyID == keyID && applies(to: layout)
+    }
 }
 
 // ─────────────────────────────────────────────
@@ -283,6 +292,35 @@ struct UserConfiguration: Codable {
     var soundFeedbackEnabled: Bool
     var showKeyPopups: Bool
     var longPressDuration: Double
+    /// Optional so configurations saved before this setting existed still
+    /// decode (synthesized Codable treats a missing optional key as nil).
+    /// Read through `splitsOnWideScreens`.
+    var wideScreenSplit: Bool? = nil
+
+    /// Split the keys into two thumb-sized halves when the keyboard is wide
+    /// (e.g. the unfolded iPhone Duo). On by default.
+    var splitsOnWideScreens: Bool {
+        get { wideScreenSplit ?? true }
+        set { wideScreenSplit = newValue }
+    }
+
+    /// Optional for the same reason as `wideScreenSplit`.
+    /// Read through `splitGap`.
+    var splitGapFraction: Double? = nil
+
+    /// Share of the keyboard's width left empty between the two halves of
+    /// a split keyboard. Smaller = halves closer together, keys wider.
+    var splitGap: Double {
+        get { Self.clampedSplitGap(splitGapFraction ?? Self.defaultSplitGap) }
+        set { splitGapFraction = Self.clampedSplitGap(newValue) }
+    }
+
+    static let defaultSplitGap: Double = 0.44
+    static let splitGapRange: ClosedRange<Double> = 0.15...0.60
+
+    private static func clampedSplitGap(_ value: Double) -> Double {
+        min(max(value, splitGapRange.lowerBound), splitGapRange.upperBound)
+    }
 
     static let `default` = UserConfiguration(
         activeLayoutID: .standard,
@@ -329,9 +367,7 @@ extension UserConfiguration {
 
 extension KeyboardLayout {
     func applying(overrides: [UserOverride]) -> KeyboardLayout {
-        let applicable = overrides.filter {
-            $0.appliesToLayouts.isEmpty || $0.appliesToLayouts.contains(self.id)
-        }
+        let applicable = overrides.filter { $0.applies(to: id) }
         guard !applicable.isEmpty else { return self }
 
         let map = Dictionary(applicable.map { ($0.targetKeyID, $0) },

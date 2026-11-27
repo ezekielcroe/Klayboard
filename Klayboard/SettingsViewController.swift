@@ -14,6 +14,7 @@ final class SettingsViewController: UITableViewController {
         case setup = 0
         case layout
         case rows
+        case wideScreen
         case height
         case keyCustomization
         case feedback
@@ -34,6 +35,22 @@ final class SettingsViewController: UITableViewController {
         config = UserConfiguration.load()
         
         setupHeaderView()
+
+        // The keyboard adds clipboard items while the app is in the background.
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(refreshClipboardRow),
+            name: UIApplication.willEnterForegroundNotification, object: nil
+        )
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        refreshClipboardRow()
+    }
+
+    @objc private func refreshClipboardRow() {
+        guard isViewLoaded else { return }
+        tableView.reloadSections(IndexSet(integer: Section.data.rawValue), with: .none)
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -58,12 +75,19 @@ final class SettingsViewController: UITableViewController {
         headerView.addSubview(titleLabel)
         headerView.addSubview(subtitleLabel)
         
+        // Center within the safe area: a side bar (iPhone Duo outer screen)
+        // insets one edge only, so the view's center is off to one side.
+        let safe = headerView.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            titleLabel.centerXAnchor.constraint(equalTo: headerView.centerXAnchor),
+            titleLabel.centerXAnchor.constraint(equalTo: safe.centerXAnchor),
             titleLabel.bottomAnchor.constraint(equalTo: headerView.centerYAnchor, constant: 4),
-            subtitleLabel.centerXAnchor.constraint(equalTo: headerView.centerXAnchor),
-            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4)
+            subtitleLabel.centerXAnchor.constraint(equalTo: safe.centerXAnchor),
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
+            subtitleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: safe.leadingAnchor, constant: 16),
+            subtitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: safe.trailingAnchor, constant: -16)
         ])
+        subtitleLabel.adjustsFontSizeToFitWidth = true
+        subtitleLabel.minimumScaleFactor = 0.8
         
         tableView.tableHeaderView = headerView
     }
@@ -82,6 +106,7 @@ final class SettingsViewController: UITableViewController {
         case .setup:            return 1
         case .layout:           return LayoutID.allCases.filter { $0 != .symbols }.count
         case .rows:             return RowMode.allCases.count
+        case .wideScreen:       return 2  // split toggle, split gap slider
         case .height:           return 1
         case .keyCustomization: return AltScheme.allCases.count
         case .feedback:         return 4
@@ -96,6 +121,7 @@ final class SettingsViewController: UITableViewController {
         case .setup:            return "Setup"
         case .layout:           return "Default Layout"
         case .rows:             return "Row Mode"
+        case .wideScreen:       return "Wide Screens"
         case .height:           return "Key Height"
         case .keyCustomization: return "Key Customization"
         case .feedback:         return "Feedback"
@@ -111,6 +137,8 @@ final class SettingsViewController: UITableViewController {
             return "Go to Settings → General → Keyboard → Keyboards → Add New Keyboard → Klayboard."
         case .rows:
             return "5 Rows hides the utility row (cursor/clipboard). Tap the ≡ button to toggle it back temporarily."
+        case .wideScreen:
+            return "When the keyboard is very wide, such as on an unfolded iPhone Duo, split the keys into two halves for your thumbs. Gap sets how much empty space sits between them: less brings the halves closer and makes the keys wider."
         case .height:
             return "Adjust the height of all keys. Drag left for compact, right for taller keys."
         case .keyCustomization:
@@ -127,13 +155,13 @@ final class SettingsViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         guard let section = Section(rawValue: indexPath.section) else {
-            return tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+            return plainCell(for: indexPath)
         }
 
         switch section {
 
         case .setup:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+            let cell = plainCell(for: indexPath)
             cell.textLabel?.text = "Open Keyboard Settings"
             cell.textLabel?.textColor = .label
             cell.imageView?.image = UIImage(systemName: "gearshape.fill")
@@ -142,7 +170,7 @@ final class SettingsViewController: UITableViewController {
             return cell
 
         case .layout:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+            let cell = plainCell(for: indexPath)
             cell.accessoryView = nil
             
             let layouts: [LayoutID] = LayoutID.allCases.filter { $0 != .symbols }
@@ -155,16 +183,44 @@ final class SettingsViewController: UITableViewController {
             switch id {
             case .standard: cell.imageView?.image = UIImage(systemName: "keyboard")
             case .coding:   cell.imageView?.image = UIImage(systemName: "chevron.left.forwardslash.chevron.right")
-            case .markdown: cell.imageView?.image = UIImage(systemName: "text.format")
+            case .markdown: cell.imageView?.image = UIImage(systemName: "textformat")
             default: break
             }
             cell.imageView?.tintColor = .systemBlue
             return cell
 
+        case .wideScreen:
+            if indexPath.row == 0 {
+                let cell = plainCell(for: indexPath)
+                cell.textLabel?.text = "Split Keyboard"
+                cell.selectionStyle = .none
+                cell.imageView?.image = UIImage(systemName: "rectangle.split.2x1")
+                cell.imageView?.tintColor = .systemTeal
+                let sw = UISwitch()
+                sw.isOn = config.splitsOnWideScreens
+                sw.tag = 3
+                sw.addTarget(self, action: #selector(toggleChanged(_:)), for: .valueChanged)
+                cell.accessoryView = sw
+                return cell
+            }
+            let cell = tableView.dequeueReusableCell(withIdentifier: "slider", for: indexPath) as! SliderCell
+            let range = UserConfiguration.splitGapRange
+            cell.configure(
+                title: "Gap",
+                value: Float(config.splitGap),
+                min: Float(range.lowerBound), max: Float(range.upperBound),
+                valueString: String(format: "%.0f%%", config.splitGap * 100)
+            )
+            cell.setEnabled(config.splitsOnWideScreens)
+            cell.onValueChanged = { [weak self] val in
+                self?.config.splitGap = Double(val)
+                self?.saveConfig()
+                cell.updateValueLabel(String(format: "%.0f%%", val * 100))
+            }
+            return cell
+
         case .rows:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-            cell.accessoryView = nil
-            
+            let cell = plainCell(for: indexPath)
             let mode = RowMode.allCases[indexPath.row]
             cell.textLabel?.text = mode.displayName
             cell.textLabel?.textColor = .label
@@ -182,6 +238,7 @@ final class SettingsViewController: UITableViewController {
                 min: 0.75, max: 1.4,
                 valueString: String(format: "%.0f%%", config.height.scaleFactor * 100)
             )
+            cell.setEnabled(true)
             cell.onValueChanged = { [weak self] val in
                 self?.config.height.scaleFactor = CGFloat(val)
                 self?.saveConfig()
@@ -193,7 +250,7 @@ final class SettingsViewController: UITableViewController {
             return altSchemeCell(for: indexPath, in: tableView)
 
         case .feedback:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+            let cell = plainCell(for: indexPath)
             cell.textLabel?.textColor = .label
             switch indexPath.row {
             case 0:
@@ -231,6 +288,7 @@ final class SettingsViewController: UITableViewController {
                     min: 0.15, max: 0.8,
                     valueString: String(format: "%.2fs", config.longPressDuration)
                 )
+                sliderCell.setEnabled(true)
                 sliderCell.onValueChanged = { [weak self] val in
                     self?.config.longPressDuration = Double(val)
                     self?.saveConfig()
@@ -242,7 +300,7 @@ final class SettingsViewController: UITableViewController {
             return cell
 
         case .macros:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+            let cell = plainCell(for: indexPath)
             if indexPath.row < config.macros.count {
                 let macro = config.macros[indexPath.row]
                 
@@ -266,14 +324,40 @@ final class SettingsViewController: UITableViewController {
             return cell
             
         case .data:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-            cell.textLabel?.text = "Clear Clipboard History"
-            cell.textLabel?.textColor = .systemRed
-            cell.imageView?.image = UIImage(systemName: "trash.fill")
-            cell.imageView?.tintColor = .systemRed
+            let cell = plainCell(for: indexPath)
+            let count = storedClipboardItemCount()
             cell.accessoryType = .none
+            if count > 0 {
+                cell.textLabel?.text = "Clear Clipboard History (\(count))"
+                cell.textLabel?.textColor = .systemRed
+                cell.imageView?.tintColor = .systemRed
+                cell.selectionStyle = .default
+            } else {
+                // Also what the row turns into after a clear, so the user
+                // can see it worked.
+                cell.textLabel?.text = "Clipboard History Is Empty"
+                cell.textLabel?.textColor = .secondaryLabel
+                cell.imageView?.tintColor = .secondaryLabel
+                cell.selectionStyle = .none
+            }
+            cell.imageView?.image = UIImage(systemName: "trash.fill")
             return cell
         }
+    }
+
+    /// Dequeues a basic cell with everything a previous row may have set
+    /// cleared. Rows here add switches, attributed text and selection
+    /// styles; without this a reused cell carries them into the wrong row.
+    private func plainCell(for indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+        cell.textLabel?.attributedText = nil
+        cell.textLabel?.text = nil
+        cell.textLabel?.textColor = .label
+        cell.imageView?.image = nil
+        cell.accessoryView = nil
+        cell.accessoryType = .none
+        cell.selectionStyle = .default
+        return cell
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -391,16 +475,19 @@ final class SettingsViewController: UITableViewController {
             }
             
         case .data:
+            let count = storedClipboardItemCount()
+            guard count > 0 else { return }
             let alert = UIAlertController(
-                title: "Clear Clipboard",
-                message: "This will permanently delete your stored clipboard history from the Klayboard App Group.",
+                title: "Clear Clipboard History?",
+                message: "Deletes the \(count) item\(count == 1 ? "" : "s") Klayboard has saved. This can't be undone.",
                 preferredStyle: .alert
             )
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-            alert.addAction(UIAlertAction(title: "Clear History", style: .destructive) { _ in
-                if let defaults = UserDefaults(suiteName: AppConstants.appGroupID) {
-                    defaults.removeObject(forKey: "clipboardHistory")
-                }
+            alert.addAction(UIAlertAction(title: "Clear History", style: .destructive) { [weak self] _ in
+                UserDefaults(suiteName: AppConstants.appGroupID)?
+                    .removeObject(forKey: AppConstants.clipboardHistoryKey)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                self?.tableView.reloadRows(at: [indexPath], with: .fade)
             })
             present(alert, animated: true)
 
@@ -459,6 +546,10 @@ final class SettingsViewController: UITableViewController {
         case 0: config.hapticFeedbackEnabled = sender.isOn
         case 1: config.soundFeedbackEnabled = sender.isOn
         case 2: config.showKeyPopups = sender.isOn
+        case 3:
+            config.splitsOnWideScreens = sender.isOn
+            // The gap slider only applies while splitting is on.
+            tableView.reloadRows(at: [IndexPath(row: 1, section: Section.wideScreen.rawValue)], with: .none)
         default: break
         }
         saveConfig()
@@ -508,6 +599,15 @@ final class SettingsViewController: UITableViewController {
 
     private func saveConfig() {
         config.save()
+    }
+
+    /// Items the keyboard has saved to clipboard history (stored as a JSON
+    /// array of strings by ClipboardHistory).
+    private func storedClipboardItemCount() -> Int {
+        guard let data = UserDefaults(suiteName: AppConstants.appGroupID)?
+                .data(forKey: AppConstants.clipboardHistoryKey),
+              let items = try? JSONDecoder().decode([String].self, from: data) else { return 0 }
+        return items.count
     }
 }
 
@@ -583,6 +683,13 @@ final class SliderCell: UITableViewCell {
 
     func updateValueLabel(_ text: String) {
         valueLabel.text = text
+    }
+
+    /// Dims the whole row when the setting it controls is inactive.
+    func setEnabled(_ enabled: Bool) {
+        slider.isEnabled = enabled
+        titleLabel.textColor = enabled ? .label : .tertiaryLabel
+        valueLabel.textColor = enabled ? .secondaryLabel : .tertiaryLabel
     }
 
     @objc private func sliderChanged() {

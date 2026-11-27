@@ -157,12 +157,14 @@ final class CursorEngine {
         guard !word.isEmpty else { return }
 
         // Determine next case
+        let title = word.prefix(1).uppercased() + word.dropFirst().lowercased()
         let toggled: String
         if word == word.lowercased() {
             // lower → Title Case
-            toggled = word.prefix(1).uppercased() + word.dropFirst().lowercased()
-        } else if word == word.prefix(1).uppercased() + word.dropFirst().lowercased() {
-            // Title → UPPER
+            toggled = title
+        } else if word == title && word != word.uppercased() {
+            // Title → UPPER. A one-letter word ("A") is both Title and
+            // UPPER, so it skips this step and goes straight back to lower.
             toggled = word.uppercased()
         } else {
             // UPPER or mixed → lower
