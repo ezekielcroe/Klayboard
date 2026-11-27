@@ -30,9 +30,7 @@ struct LayoutTests {
             BaseLayouts.layout(for: id, rowMode: mode).rows.flatMap(\.keys).first { $0.id == "space" }?.widthMultiplier
         }
         guard let six = spaceWidth(.sixRows), let five = spaceWidth(.fiveRows) else { return }
-        withKnownIssue("Bug: the 3.5-unit floor widens the coding layout's 3-unit spacebar") {
-            #expect(five <= six)
-        } when: { id == .coding }
+        #expect(five <= six)
     }
 
     @Test func totalHeightAddsRowsAndSpacing() {

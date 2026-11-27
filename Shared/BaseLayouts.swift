@@ -395,7 +395,9 @@ enum BaseLayouts {
                                 action: k.action,
                                 altAction: k.altAction,
                                 swipeUpAction: k.swipeUpAction,
-                                widthMultiplier: max(k.widthMultiplier - 1.0, 3.5),
+                                // Give up one unit, but don't go below 3.5
+                                // (and never widen an already-narrow spacebar).
+                                widthMultiplier: min(k.widthMultiplier, max(k.widthMultiplier - 1.0, 3.5)),
                                 style: k.style
                             )
                         }
