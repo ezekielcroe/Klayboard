@@ -70,15 +70,14 @@ struct CursorEngineTests {
         #expect(proxy.cursor == 6)
     }
 
-    /// A one-letter word is the same in Title and UPPER case.
+    /// A one-letter word is the same in Title and UPPER case, so it
+    /// alternates between the two cases.
     @Test func toggleCaseOnSingleLetter() {
         let proxy = MockTextProxy("a")
         engine.toggleCase(proxy: proxy)
         #expect(proxy.text == "A")
         engine.toggleCase(proxy: proxy)
-        withKnownIssue("Bug: 'A' counts as Title case, toggles to UPPER 'A', and never returns to lowercase") {
-            #expect(proxy.text == "a")
-        }
+        #expect(proxy.text == "a")
     }
 
     @Test func shiftTabRemovesOneHardTab() {
