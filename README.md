@@ -22,7 +22,7 @@ Klayboard circumvents standard iOS Custom Keyboard memory limits and layout engi
 
 ## 🚀 Building & Installation
 
-1. Clone the repository and open `Klayboard.xcworkspace`.
+1. Clone the repository and open `Klayboard.xcodeproj`.
 2. Update the **Bundle Identifier** for both the `Klayboard` container app and the `KlayboardExtension` targets.
 3. Configure the **App Group**:
    * Ensure you have an App Group registered in your Apple Developer account.
@@ -30,6 +30,17 @@ Klayboard circumvents standard iOS Custom Keyboard memory limits and layout engi
    * Update the `AppConstants.appGroupID` string in `Shared/KeyboardDataStructures.swift` to match.
 4. Build and run on your physical iOS device.
 5. Go to **Settings > General > Keyboard > Keyboards > Add New Keyboard...** and select Klayboard.
+
+## 🧪 Tests
+
+The keyboard's logic (macros, cursor movement, layouts, split layout, saved settings, clipboard history) has unit tests in `Tests/KlayboardCoreTests`, run on the iOS simulator:
+
+```sh
+scripts/test.sh            # defaults to "iPhone 17"
+scripts/test.sh "iPhone Duo"
+```
+
+`Package.swift` exists only for these tests; the app is still built from `Klayboard.xcodeproj`.
 
 ## 🔒 Privacy First
 Klayboard is completely offline. It contains zero networking code and does not log, store, or transmit your keystrokes. For full details on why Apple's "Allow Full Access" toggle is requested, please see the [Privacy Policy](PrivacyPolicy.md).
