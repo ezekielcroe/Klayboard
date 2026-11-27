@@ -40,6 +40,7 @@ final class KeyCustomizationViewController: UIViewController {
     private let applyButton = UIButton(type: .system)
     private let clearButton = UIButton(type: .system)
     private let infoLabel = UILabel()
+    private let primaryErrorLabel = UILabel()
 
     // ── Sizing ───────────────────────────────
     private let miniKeyHeight: CGFloat = 36
@@ -115,12 +116,14 @@ final class KeyCustomizationViewController: UIViewController {
     private func buildUI() {
         // Scroll view for the whole page
         scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.keyboardDismissMode = .interactive
         view.addSubview(scrollView)
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            // Ends at the keyboard, so the edit fields can scroll into view.
+            scrollView.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
         ])
 
         // Mini keyboard container
@@ -135,6 +138,7 @@ final class KeyCustomizationViewController: UIViewController {
         infoLabel.font = .systemFont(ofSize: 14, weight: .medium)
         infoLabel.textColor = .secondaryLabel
         infoLabel.textAlignment = .center
+        infoLabel.numberOfLines = 0
         scrollView.addSubview(infoLabel)
 
         // Detail panel
@@ -186,6 +190,13 @@ final class KeyCustomizationViewController: UIViewController {
         primaryField.autocorrectionType = .no
         primaryField.translatesAutoresizingMaskIntoConstraints = false
         detailPanel.addSubview(primaryField)
+        primaryField.addTarget(self, action: #selector(primaryFieldEdited), for: .editingChanged)
+
+        primaryErrorLabel.font = .systemFont(ofSize: 13, weight: .regular)
+        primaryErrorLabel.textColor = .systemRed
+        primaryErrorLabel.numberOfLines = 0
+        primaryErrorLabel.translatesAutoresizingMaskIntoConstraints = false
+        detailPanel.addSubview(primaryErrorLabel)
 
         // Long-press character field
         let longPressLabel = makeFieldLabel("Long-press:")
@@ -201,7 +212,7 @@ final class KeyCustomizationViewController: UIViewController {
         detailPanel.addSubview(longPressField)
 
         // Buttons
-        applyButton.setTitle("Apply", for: .normal)
+        applyButton.setTitle("Save Key", for: .normal)
         applyButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         applyButton.backgroundColor = .systemBlue
         applyButton.setTitleColor(.white, for: .normal)
@@ -230,7 +241,11 @@ final class KeyCustomizationViewController: UIViewController {
             primaryField.trailingAnchor.constraint(equalTo: detailPanel.trailingAnchor, constant: -16),
             primaryField.heightAnchor.constraint(equalToConstant: 44),
 
-            longPressLabel.topAnchor.constraint(equalTo: primaryField.bottomAnchor, constant: 14),
+            primaryErrorLabel.topAnchor.constraint(equalTo: primaryField.bottomAnchor, constant: 4),
+            primaryErrorLabel.leadingAnchor.constraint(equalTo: detailPanel.leadingAnchor, constant: 16),
+            primaryErrorLabel.trailingAnchor.constraint(equalTo: detailPanel.trailingAnchor, constant: -16),
+
+            longPressLabel.topAnchor.constraint(equalTo: primaryErrorLabel.bottomAnchor, constant: 10),
             longPressLabel.leadingAnchor.constraint(equalTo: detailPanel.leadingAnchor, constant: 16),
 
             longPressField.topAnchor.constraint(equalTo: longPressLabel.bottomAnchor, constant: 6),
@@ -338,12 +353,8 @@ final class KeyCustomizationViewController: UIViewController {
     }
 
     private func showNotCustomizableHint(for def: KeyDefinition) {
-        let label = def.label.hasPrefix("sf:") ? "This key" : "'\(def.label)'"
-        let hint = "\(label) is a system key and can't be remapped to a character."
-
-        let alert = UIAlertController(title: nil, message: hint, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
+        let label = def.label.hasPrefix("sf:") ? "That key" : "'\(def.label)'"
+        infoLabel.text = "\(label) can't be remapped. Pick a letter, number or symbol key."
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -363,7 +374,18 @@ final class KeyCustomizationViewController: UIViewController {
 
         let hasOv = hasOverride(for: keyID)
         let displayLabel = effective.label.hasPrefix("sf:") ? keyID : effective.label
-        selectedKeyLabel.text = hasOv ? "🔵 \(displayLabel.uppercased()) (customized)" : displayLabel.uppercased()
+        let title = NSMutableAttributedString(
+            string: displayLabel.uppercased(),
+            attributes: [.font: UIFont.systemFont(ofSize: 18, weight: .semibold), .foregroundColor: UIColor.label]
+        )
+        if hasOv {
+            title.append(NSAttributedString(
+                string: "   Customized",
+                attributes: [.font: UIFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: UIColor.systemBlue]
+            ))
+        }
+        selectedKeyLabel.attributedText = title
+        primaryErrorLabel.text = nil
 
         // Fill fields with current values
         primaryField.text = characterFrom(effective.action)
@@ -384,7 +406,7 @@ final class KeyCustomizationViewController: UIViewController {
         let longPressChar = longPressField.text.flatMap { $0.isEmpty ? nil : String($0.prefix(1)) }
 
         guard let primary = primaryChar, !primary.isEmpty else {
-            showValidationError("Primary character cannot be empty.")
+            primaryErrorLabel.text = "Enter the character this key should type."
             return
         }
 
@@ -431,7 +453,7 @@ final class KeyCustomizationViewController: UIViewController {
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Reset", style: .destructive) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "Reset All", style: .destructive) { [weak self] _ in
             guard let self = self else { return }
             self.config.overrides.removeAll { $0.applies(to: self.layoutID) }
             self.saveAndRefresh()
@@ -457,10 +479,8 @@ final class KeyCustomizationViewController: UIViewController {
         updateDetailPanel()
     }
 
-    private func showValidationError(_ message: String) {
-        let alert = UIAlertController(title: "Invalid", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
+    @objc private func primaryFieldEdited() {
+        primaryErrorLabel.text = nil
     }
 
     private func showBriefConfirmation() {
