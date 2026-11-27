@@ -6,7 +6,7 @@ Klayboard is a custom iOS keyboard for power typists: a keyboard extension (`Kla
 
 **Overall state: healthy for a vibe-coded project, now with a safety net.** The code was already readable and well commented, with no secrets, no `TODO`s, no swallowed errors beyond two deliberate fallbacks, and no compiler warnings in a normal build. The serious problems were in the **text-expansion (macro) engine**, which could delete text you had typed in some everyday situations, and in **data shared between the app and the keyboard**, where clearing clipboard history in the app could be undone. Both are fixed.
 
-**Numbers:** 49 tests added (previously none). 7 bugs fixed, 2 build-config problems fixed, 4 behaviour-preserving cleanups. Nothing is Critical in the security sense (the app has no network code and no accounts), but the first macro bug changed or deleted text you had typed, which is the worst thing a keyboard can do.
+**Numbers:** 50 tests added (previously none). 10 bugs fixed, 2 build-config problems fixed, 4 behaviour-preserving cleanups. Nothing is Critical in the security sense (the app has no network code and no accounts), but the first macro bug changed or deleted text you had typed, which is the worst thing a keyboard can do.
 
 **Scope agreed in intake**
 - Change level: **Clean and fix**. Safe cleanup, tests and bug fixes; unclear intent comes back as a question; UX ideas are proposed, not built.
@@ -19,7 +19,7 @@ Klayboard is a custom iOS keyboard for power typists: a keyboard extension (`Kla
 ## How to run and verify
 
 - **App + keyboard:** open `Klayboard.xcodeproj`, run the `Klayboard` scheme, then add the keyboard in Settings → General → Keyboard → Keyboards → Add New Keyboard.
-- **Tests:** `scripts/test.sh` (defaults to the "iPhone 17" simulator; pass another name, e.g. `scripts/test.sh "iPhone Duo"`). 49 tests, all passing.
+- **Tests:** `scripts/test.sh` (defaults to the "iPhone 17" simulator; pass another name, e.g. `scripts/test.sh "iPhone Duo"`). 50 tests, all passing.
 
 ## Inventory
 
@@ -53,6 +53,8 @@ All on `deslopify/2026-11-27`, oldest first.
 | Match the extension's version to the app | Config fix | Extension was 1.5 (build 2) inside app 1.6 (build 1); App Store Connect flags this. Now 1.6 (1). |
 | Remove launch-screen setting for a missing storyboard | Config fix | `UILaunchScreen` in the plist already provides the launch screen. |
 | Let constraints size the keyboard during rotation / fold | Cleanup | `viewWillTransition` set a frame on a constraint-laid-out view. Verified by unfolding the Duo simulator with the keyboard open. |
+| Small UX improvements (agreed) | UX | Recommendations 2, 3, 5 and 6, plus three issues found while checking them: see the UX section. |
+| Fix the Markdown layout's missing icon | **Bug fix** | Bug 8. |
 
 ## Bugs found
 
@@ -65,6 +67,9 @@ All on `deslopify/2026-11-27`, oldest first.
 | 5 | Medium | With the Grouped symbol scheme on, Customize Keys showed Familiar symbols, and saving a key silently replaced its Grouped swipe-down symbol with the Familiar one. | `KeyCustomizationViewController` | **Fixed** |
 | 6 | Low | The `Aa` key on a one-letter word (`a` → `A`) could never get back to lowercase. | `CursorEngine.toggleCase` | **Fixed** (test) |
 | 7 | Low | In 5-row mode the Coding layout's spacebar got *wider* (3 → 3.5 units), squeezing the bracket and symbol keys. | `BaseLayouts.layout(for:)` | **Fixed** (test) |
+| 8 | Low | The Coding layout's "switch to Markdown" key and the Markdown row in Settings used an icon name that doesn't exist (`text.format`), so both showed blank. | `BaseLayouts`, `SettingsViewController` | **Fixed** (test checks every key icon exists) |
+| 9 | Low | Settings reused table cells without clearing them, so after a reload a switch could appear on the wrong row (seen on "Clear Clipboard History"). | `SettingsViewController` | **Fixed** |
+| 10 | Low | In Customize Keys the keyboard covered the edit fields and Save button, and the page couldn't scroll them into view. | `KeyCustomizationViewController` | **Fixed** |
 
 ## Questions for you
 
@@ -81,6 +86,7 @@ All on `deslopify/2026-11-27`, oldest first.
 |---|---|
 | Macro engine (8) | expansion, partial triggers, backspace, reset, disabled macros, named Markdown macros + cursor placement, long triggers, overlapping triggers |
 | Cursor engine (12) | word jumps, delete word, delete to line start, case cycling (incl. one-letter words), shift-tab |
+| Key icons (1) | every SF Symbol a key uses exists |
 | Layouts and overrides (9) | 5/6-row visibility, toggle key injection, spacebar width, heights, removing the globe key, per-layout overrides, alt schemes |
 | Wide-screen split (6) | when to split, width cap, where rows split, equal spacebar halves, no keys lost in any layout |
 | Saved configuration (4) | round trip, loading settings saved before the split option existed, corrupt data fallback, height clamp |
@@ -98,13 +104,13 @@ All on `deslopify/2026-11-27`, oldest first.
 
 ## UX/UI recommendations
 
-Ordered by impact on the critical flows. All **open for discussion**; none built.
+Ordered by impact on the critical flows.
 
-| # | Issue | Effect on users | Suggested change | Effort |
+| # | Issue | Suggested change | Effort | Status |
 |---|---|---|---|---|
-| 1 | Macros can only be added or edited in a two-field alert. No way to turn one off, no check for duplicate or empty-looking triggers (e.g. a single letter `a` would expand on every `a`). | Easy to create a macro that hijacks normal typing, with no clear way to pause it. | A small macro editor screen: trigger, expansion (multi-line), on/off switch, and a warning when a trigger is a common word or a single character. | Medium |
-| 2 | "Clear Clipboard History" gives no feedback after you confirm. | You can't tell it worked. | Brief "Cleared" confirmation, and show the item count in the row ("Clear Clipboard History (7)"). | Small |
-| 3 | Customize Keys shows status with an emoji ("🔵 Q (customized)") and uses "OK" alerts for validation. | Reads as unfinished; alerts interrupt for simple input mistakes. | A plain "Customized" badge; show validation inline under the field. Rename alert buttons to what they do. | Small |
-| 4 | The split keyboard on the unfolded Duo uses a fixed gap. | People with smaller hands or who hold the device lower may want the halves closer. | A "Split width" slider under the split toggle. | Small–medium |
-| 5 | Copy key toasts say "Copied — may be truncated. Use system Copy for large selections." for anything over 80 characters. | Alarming and long for the common case of copying a sentence. | Only warn when the copied text actually hit the iOS limit (the keyboard can compare against the selection length), and shorten the wording. | Small |
-| 6 | Onboarding's Enable page button reads "Skip to Tour" before you've visited Settings. | Suggests skipping setup is the expected path. | "Next" everywhere, with the status line doing the guiding. | Small |
+| 1 | Macros can only be added or edited in a two-field alert. No on/off switch, no warning for triggers that hijack normal typing (e.g. a single `a`). | A small macro editor screen: trigger, multi-line expansion, on/off switch, warning for risky triggers. | Medium | Open |
+| 2 | "Clear Clipboard History" gave no feedback after confirming. | Row shows the item count; after clearing it reads "Clipboard History Is Empty" (greyed, not tappable) with a success haptic. Confirmation says how many items will go. Refreshes when you return to the app. | Small | **Done**, checked in simulator |
+| 3 | Customize Keys used an emoji badge ("🔵 Q (customized)") and blocking "OK" alerts. | Plain blue "Customized" label; empty-field error shown under the field and cleared as you type; tapping a system key explains inline; buttons say "Save Key" and "Reset All". | Small | **Done**, checked in simulator |
+| 4 | The split keyboard uses a fixed gap. | A "Split width" slider under the split toggle. | Small–medium | Open |
+| 5 | Copy / cut warnings were long ("Copied — may be truncated. Use system Copy for large selections."). | Shortened to e.g. "Copied. Long text may be cut off — use system Copy." The 80-character threshold is unchanged: iOS doesn't tell the keyboard whether a selection was cut short, so it can't warn only when it actually happened. | Small | **Done** (wording only) |
+| 6 | Onboarding's Enable page button said "Skip to Tour" / "Continue" / "Next" depending on state. | Always "Next"; the status line does the guiding. | Small | **Done** |
