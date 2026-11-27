@@ -155,17 +155,17 @@ final class KeyCustomizationViewController: UIViewController {
 
         NSLayoutConstraint.activate([
             infoLabel.topAnchor.constraint(equalTo: scrollView.topAnchor, constant: 16),
-            infoLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            infoLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            infoLabel.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            infoLabel.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
 
             miniKeyboardContainer.topAnchor.constraint(equalTo: infoLabel.bottomAnchor, constant: 12),
-            miniKeyboardContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-            miniKeyboardContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            miniKeyboardContainer.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 12),
+            miniKeyboardContainer.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
             miniKeyboardContainer.heightAnchor.constraint(equalToConstant: totalMiniHeight),
 
             detailPanel.topAnchor.constraint(equalTo: miniKeyboardContainer.bottomAnchor, constant: 20),
-            detailPanel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            detailPanel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            detailPanel.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            detailPanel.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
             detailPanel.bottomAnchor.constraint(lessThanOrEqualTo: scrollView.bottomAnchor, constant: -20),
         ])
     }

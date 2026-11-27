@@ -58,12 +58,19 @@ final class SettingsViewController: UITableViewController {
         headerView.addSubview(titleLabel)
         headerView.addSubview(subtitleLabel)
         
+        // Center within the safe area: a side bar (iPhone Duo outer screen)
+        // insets one edge only, so the view's center is off to one side.
+        let safe = headerView.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            titleLabel.centerXAnchor.constraint(equalTo: headerView.centerXAnchor),
+            titleLabel.centerXAnchor.constraint(equalTo: safe.centerXAnchor),
             titleLabel.bottomAnchor.constraint(equalTo: headerView.centerYAnchor, constant: 4),
-            subtitleLabel.centerXAnchor.constraint(equalTo: headerView.centerXAnchor),
-            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4)
+            subtitleLabel.centerXAnchor.constraint(equalTo: safe.centerXAnchor),
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
+            subtitleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: safe.leadingAnchor, constant: 16),
+            subtitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: safe.trailingAnchor, constant: -16)
         ])
+        subtitleLabel.adjustsFontSizeToFitWidth = true
+        subtitleLabel.minimumScaleFactor = 0.8
         
         tableView.tableHeaderView = headerView
     }
@@ -81,7 +88,7 @@ final class SettingsViewController: UITableViewController {
         switch s {
         case .setup:            return 1
         case .layout:           return LayoutID.allCases.filter { $0 != .symbols }.count
-        case .rows:             return RowMode.allCases.count
+        case .rows:             return RowMode.allCases.count + 1  // + wide-screen split toggle
         case .height:           return 1
         case .keyCustomization: return AltScheme.allCases.count
         case .feedback:         return 4
@@ -110,7 +117,7 @@ final class SettingsViewController: UITableViewController {
         case .setup:
             return "Go to Settings → General → Keyboard → Keyboards → Add New Keyboard → Klayboard."
         case .rows:
-            return "5 Rows hides the utility row (cursor/clipboard). Tap the ≡ button to toggle it back temporarily."
+            return "5 Rows hides the utility row (cursor/clipboard). Tap the ≡ button to toggle it back temporarily. Split on Wide Screens divides the keys into two thumb-sized halves when the keyboard is very wide, such as on an unfolded iPhone Duo."
         case .height:
             return "Adjust the height of all keys. Drag left for compact, right for taller keys."
         case .keyCustomization:
@@ -164,7 +171,23 @@ final class SettingsViewController: UITableViewController {
         case .rows:
             let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
             cell.accessoryView = nil
-            
+
+            if indexPath.row == RowMode.allCases.count {
+                cell.textLabel?.text = "Split on Wide Screens"
+                cell.textLabel?.textColor = .label
+                cell.accessoryType = .none
+                cell.selectionStyle = .none
+                cell.imageView?.image = UIImage(systemName: "rectangle.split.2x1")
+                cell.imageView?.tintColor = .systemTeal
+                let sw = UISwitch()
+                sw.isOn = config.splitsOnWideScreens
+                sw.tag = 3
+                sw.addTarget(self, action: #selector(toggleChanged(_:)), for: .valueChanged)
+                cell.accessoryView = sw
+                return cell
+            }
+            cell.selectionStyle = .default
+
             let mode = RowMode.allCases[indexPath.row]
             cell.textLabel?.text = mode.displayName
             cell.textLabel?.textColor = .label
@@ -369,6 +392,7 @@ final class SettingsViewController: UITableViewController {
             tableView.reloadSections(IndexSet(integer: section.rawValue), with: .none)
 
         case .rows:
+            guard indexPath.row < RowMode.allCases.count else { return }  // split toggle row
             config.rowMode = RowMode.allCases[indexPath.row]
             saveConfig()
             tableView.reloadSections(IndexSet(integer: section.rawValue), with: .none)
@@ -459,6 +483,7 @@ final class SettingsViewController: UITableViewController {
         case 0: config.hapticFeedbackEnabled = sender.isOn
         case 1: config.soundFeedbackEnabled = sender.isOn
         case 2: config.showKeyPopups = sender.isOn
+        case 3: config.splitsOnWideScreens = sender.isOn
         default: break
         }
         saveConfig()

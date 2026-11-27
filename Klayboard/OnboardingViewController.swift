@@ -85,7 +85,7 @@ final class OnboardingViewController: UIViewController {
         pageControl.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(pageControl)
         NSLayoutConstraint.activate([
-            pageControl.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            pageControl.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
             pageControl.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12)
         ])
     }
@@ -252,15 +252,15 @@ private final class WelcomePage: UIViewController {
             divider.widthAnchor.constraint(equalToConstant: 40),
             divider.heightAnchor.constraint(equalToConstant: 2),
 
-            stack.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            stack.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
             stack.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -40),
-            stack.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 32),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -32),
+            stack.leadingAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 32),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -32),
 
             startButton.widthAnchor.constraint(equalToConstant: 260),
             startButton.heightAnchor.constraint(equalToConstant: 50),
 
-            buttonStack.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            buttonStack.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
             buttonStack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -60)
         ])
     }
@@ -335,18 +335,35 @@ private final class InstallPage: UIViewController {
         bottomStack.alignment = .center
         bottomStack.translatesAutoresizingMaskIntoConstraints = false
 
-        view.addSubview(topStack)
-        view.addSubview(stepsCard)
+        // Title and steps scroll; the buttons stay pinned at the bottom.
+        // Both iPhone Duo screens are under 680pt tall, and the outer
+        // screen's side bar narrows the card, so the steps don't always fit.
+        let scrollView = UIScrollView()
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(topStack)
+        scrollView.addSubview(stepsCard)
+
+        view.addSubview(scrollView)
         view.addSubview(bottomStack)
 
+        let content = scrollView.contentLayoutGuide
+
         NSLayoutConstraint.activate([
-            topStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 40),
-            topStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 32),
-            topStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -32),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: bottomStack.topAnchor, constant: -16),
+            content.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+
+            topStack.topAnchor.constraint(equalTo: content.topAnchor, constant: 40),
+            topStack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 32),
+            topStack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -32),
 
             stepsCard.topAnchor.constraint(equalTo: topStack.bottomAnchor, constant: 28),
-            stepsCard.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            stepsCard.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            stepsCard.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 24),
+            stepsCard.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -24),
+            stepsCard.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -8),
 
             openSettingsButton.widthAnchor.constraint(equalToConstant: 260),
             openSettingsButton.heightAnchor.constraint(equalToConstant: 50),
@@ -354,7 +371,7 @@ private final class InstallPage: UIViewController {
             continueButton.heightAnchor.constraint(equalToConstant: 50),
 
             bottomStack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -60),
-            bottomStack.centerXAnchor.constraint(equalTo: view.centerXAnchor)
+            bottomStack.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor)
         ])
     }
 
@@ -437,6 +454,9 @@ private final class InstallPage: UIViewController {
         label.textColor = .label
         label.adjustsFontSizeToFitWidth = true
         label.minimumScaleFactor = 0.8
+        // Wraps rather than truncates when the card is narrow (e.g. beside
+        // the iPhone Duo outer screen's side bar).
+        label.numberOfLines = 0
         label.translatesAutoresizingMaskIntoConstraints = false
 
         container.addSubview(badge)
@@ -451,8 +471,15 @@ private final class InstallPage: UIViewController {
             label.leadingAnchor.constraint(equalTo: badge.trailingAnchor, constant: 12),
             label.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            label.topAnchor.constraint(greaterThanOrEqualTo: container.topAnchor),
 
-            container.heightAnchor.constraint(equalToConstant: 28)
+            container.heightAnchor.constraint(greaterThanOrEqualToConstant: 28),
+            {
+                // Hug the content: 28pt unless the label wraps.
+                let hug = container.heightAnchor.constraint(equalToConstant: 28)
+                hug.priority = .defaultLow
+                return hug
+            }()
         ])
 
         return container
@@ -626,19 +653,19 @@ private final class LayoutTourPage: UIViewController {
 
         NSLayoutConstraint.activate([
             title.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 32),
-            title.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            title.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
 
             diagramContainer.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 24),
-            diagramContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            diagramContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            diagramContainer.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            diagramContainer.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
 
             descStack.topAnchor.constraint(equalTo: diagramContainer.bottomAnchor, constant: 24),
-            descStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 32),
-            descStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -32),
+            descStack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 32),
+            descStack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -32),
 
             nextButton.widthAnchor.constraint(equalToConstant: 260),
             nextButton.heightAnchor.constraint(equalToConstant: 50),
-            nextButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            nextButton.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
             nextButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -60)
         ])
     }
@@ -780,7 +807,7 @@ private final class HiddenPowersPage: UIViewController {
 
         NSLayoutConstraint.activate([
             title.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 32),
-            title.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            title.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
 
             scrollView.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 20),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -788,14 +815,13 @@ private final class HiddenPowersPage: UIViewController {
             scrollView.bottomAnchor.constraint(equalTo: nextButton.topAnchor, constant: -16),
 
             cardStack.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            cardStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            cardStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            cardStack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 20),
+            cardStack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -20),
             cardStack.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: -8),
-            cardStack.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -40),
 
             nextButton.widthAnchor.constraint(equalToConstant: 260),
             nextButton.heightAnchor.constraint(equalToConstant: 50),
-            nextButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            nextButton.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
             nextButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -60)
         ])
     }
@@ -863,8 +889,6 @@ private final class TryItPage: UIViewController {
     private var challengeLabels: [UILabel] = []
     private let doneButton = makePrimaryButton(title: "I'm Ready")
 
-    private var doneButtonBottomConstraint: NSLayoutConstraint!
-
     // Challenges for the user to try
     private let challenges = [
         ("Type anything", "Start typing a sentence"),
@@ -909,12 +933,17 @@ private final class TryItPage: UIViewController {
         doneButton.addTarget(self, action: #selector(didTapDone), for: .touchUpInside)
         view.addSubview(doneButton)
 
-        doneButtonBottomConstraint = doneButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -60)
+        // Sits 60pt above the safe area, or 16pt above the keyboard when the
+        // keyboard is taller than that. keyboardLayoutGuide tracks the
+        // keyboard through resizes (fold/unfold) with no frame math.
+        let restingBottom = doneButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -60)
+        restingBottom.priority = .defaultHigh
         NSLayoutConstraint.activate([
             doneButton.widthAnchor.constraint(equalToConstant: 260),
             doneButton.heightAnchor.constraint(equalToConstant: 50),
-            doneButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            doneButtonBottomConstraint
+            doneButton.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
+            doneButton.bottomAnchor.constraint(lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor, constant: -16),
+            restingBottom
         ])
 
         // ── Scrollable Content Area ───────────
@@ -1003,24 +1032,24 @@ private final class TryItPage: UIViewController {
 
             // Inner elements
             title.topAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.topAnchor, constant: 32),
-            title.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            title.centerXAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.centerXAnchor),
 
             subtitle.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 8),
-            subtitle.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            subtitle.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 32),
-            subtitle.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -32),
+            subtitle.centerXAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.centerXAnchor),
+            subtitle.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.safeAreaLayoutGuide.leadingAnchor, constant: 32),
+            subtitle.trailingAnchor.constraint(lessThanOrEqualTo: contentView.safeAreaLayoutGuide.trailingAnchor, constant: -32),
 
             textView.topAnchor.constraint(equalTo: subtitle.bottomAnchor, constant: 20),
-            textView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            textView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            textView.leadingAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.leadingAnchor, constant: 20),
+            textView.trailingAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.trailingAnchor, constant: -20),
             textView.heightAnchor.constraint(equalToConstant: 100),
 
             challengeTitle.topAnchor.constraint(equalTo: textView.bottomAnchor, constant: 20),
-            challengeTitle.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            challengeTitle.leadingAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.leadingAnchor, constant: 24),
 
             challengeStack.topAnchor.constraint(equalTo: challengeTitle.bottomAnchor, constant: 10),
-            challengeStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            challengeStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            challengeStack.leadingAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.leadingAnchor, constant: 24),
+            challengeStack.trailingAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.trailingAnchor, constant: -24),
             challengeStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20)
         ])
     }
@@ -1035,44 +1064,17 @@ private final class TryItPage: UIViewController {
 
     private func setupKeyboardObservers() {
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillShow), name: UIResponder.keyboardWillShowNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillHide), name: UIResponder.keyboardWillHideNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardDidHideChallenge), name: UIResponder.keyboardDidHideNotification, object: nil)
     }
 
+    /// Layout follows view.keyboardLayoutGuide; this only scrolls so the
+    /// challenges stay visible above the keyboard.
     @objc private func keyboardWillShow(notification: NSNotification) {
-        guard let userInfo = notification.userInfo,
-              let kbFrame = userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-
-        let duration = userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.3
-        let curveValue = userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int ?? UIView.AnimationCurve.easeOut.rawValue
-
-        // Calculate how much to shift the button up.
-        // It should float just above the keyboard frame.
-        let safeAreaBottom = view.safeAreaInsets.bottom
-        let keyboardHeight = kbFrame.height
-
-        // Push button exactly to the top of the keyboard + padding
-        let newConstant = -(keyboardHeight - safeAreaBottom + 16)
-
-        doneButtonBottomConstraint.constant = newConstant
-
-        UIView.animate(withDuration: duration, delay: 0, options: UIView.AnimationOptions(rawValue: UInt(curveValue << 16))) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
             self.view.layoutIfNeeded()
-        }
-
-        // Scroll slightly so challenges are visible if hidden
-        let bottomOffset = CGPoint(x: 0, y: max(0, scrollView.contentSize.height - scrollView.bounds.height))
-        scrollView.setContentOffset(bottomOffset, animated: true)
-    }
-
-    @objc private func keyboardWillHide(notification: NSNotification) {
-        let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.3
-
-        // Restore standard bottom margin
-        doneButtonBottomConstraint.constant = -60
-
-        UIView.animate(withDuration: duration) {
-            self.view.layoutIfNeeded()
+            let bottomOffset = CGPoint(x: 0, y: max(0, self.scrollView.contentSize.height - self.scrollView.bounds.height))
+            self.scrollView.setContentOffset(bottomOffset, animated: true)
         }
     }
 

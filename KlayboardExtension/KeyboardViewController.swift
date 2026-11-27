@@ -206,6 +206,7 @@ final class KeyboardViewController: UIInputViewController {
         )
 
         keyboardView.longPressDuration = config.longPressDuration
+        keyboardView.splitOnWideScreens = config.splitsOnWideScreens
 
         keyboardView.configure(
             rows: rows,

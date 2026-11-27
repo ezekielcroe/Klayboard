@@ -283,6 +283,17 @@ struct UserConfiguration: Codable {
     var soundFeedbackEnabled: Bool
     var showKeyPopups: Bool
     var longPressDuration: Double
+    /// Optional so configurations saved before this setting existed still
+    /// decode (synthesized Codable treats a missing optional key as nil).
+    /// Read through `splitsOnWideScreens`.
+    var wideScreenSplit: Bool? = nil
+
+    /// Split the keys into two thumb-sized halves when the keyboard is wide
+    /// (e.g. the unfolded iPhone Duo). On by default.
+    var splitsOnWideScreens: Bool {
+        get { wideScreenSplit ?? true }
+        set { wideScreenSplit = newValue }
+    }
 
     static let `default` = UserConfiguration(
         activeLayoutID: .standard,
