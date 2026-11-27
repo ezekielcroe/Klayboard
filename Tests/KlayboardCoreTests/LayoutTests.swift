@@ -1,5 +1,6 @@
 import Testing
 import CoreGraphics
+import UIKit
 @testable import KlayboardCore
 
 @Suite("Layouts and overrides")
@@ -121,6 +122,25 @@ struct SplitLayoutTests {
                 #expect(ids == Set(row.keys.map(\.id)))
                 #expect((0...split.keys.count).contains(split.rightStart))
             }
+        }
+    }
+}
+
+@Suite("Key icons")
+struct KeyIconTests {
+    /// A misspelled SF Symbol name renders as a blank key.
+    @Test func everyKeyIconExists() {
+        var names: Set<String> = ["shift", "shift.fill", "capslock.fill"]  // shift states
+        for id in LayoutID.allCases {
+            for mode in RowMode.allCases {
+                for key in BaseLayouts.layout(for: id, rowMode: mode).rows.flatMap(\.keys)
+                where key.label.hasPrefix("sf:") {
+                    names.insert(String(key.label.dropFirst(3)))
+                }
+            }
+        }
+        for name in names.sorted() {
+            #expect(UIImage(systemName: name) != nil, "missing SF Symbol \(name)")
         }
     }
 }

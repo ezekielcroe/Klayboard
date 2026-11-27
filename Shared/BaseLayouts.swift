@@ -211,7 +211,7 @@ enum BaseLayouts {
         KeyDefinition(id: "delWord",    label: "sf:delete.backward",  action: .deleteWord,             altAction: .deleteToLineStart,  style: .utility),
 
         // Mode Switcher: Coding -> Markdown
-        KeyDefinition(id: "switchMode", label: "sf:text.format",      action: .switchLayout(.markdown), style: .utility),
+        KeyDefinition(id: "switchMode", label: "sf:textformat",       action: .switchLayout(.markdown), style: .utility),
     ], baseHeight: 38, tag: .utility)
 
     static let codingBottomRow = LayoutRow(keys: [
